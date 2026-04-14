@@ -28,7 +28,7 @@ func connectionRouter(ctx context.Context, network adapter.NetworkManager, traff
 	r := chi.NewRouter()
 	r.Get("/", getConnections(ctx, trafficManager))
 	r.Delete("/", closeAllConnections(ctx, network, trafficManager))
-	r.Delete("/{id}", closeConnection(trafficManager))
+	r.Delete("/{id}", closeConnection(ctx, trafficManager))
 	// Smart-block: close the connection AND mark its upstream Smart-selected
 	// node as blocked so the group stops selecting it for a cooldown window.
 	// Mirrors mihomo's `DELETE /connections/smart/{id}`.
@@ -118,6 +118,56 @@ func (c connectionObject) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// notifySmartUserDisconnect walks the tracker's real-outbound chain to find
+// a Smart group; if one is found, calls Smart.NotifyUserDisconnect with the
+// downstream node + target so manual close-via-API events participate in
+// short-life → markDead escalation identically to direct smartTrackedConn.Close.
+//
+// Called IMMEDIATELY BEFORE tracker.Close() so the Smart state updates
+// before the async recordStats goroutine in smartTrackedConn.Close fires.
+// That race used to let the user's next DialContext hit the same stale
+// unwrap cache even when closing explicitly through the API.
+func notifySmartUserDisconnect(ctx context.Context, meta *trafficcontrol.TrackerMetadata) {
+	if meta == nil {
+		return
+	}
+	outboundMgr := service.FromContext[adapter.OutboundManager](ctx)
+	if outboundMgr == nil {
+		return
+	}
+	chain := meta.Metadata.GetRealOutboundChain()
+	for i, tag := range chain {
+		ob, ok := outboundMgr.Outbound(tag)
+		if !ok {
+			continue
+		}
+		sg, ok := ob.(*group.Smart)
+		if !ok {
+			continue
+		}
+		nodeTag := ""
+		if i+1 < len(chain) {
+			nodeTag = chain[i+1]
+		}
+		if nodeTag == "" {
+			nodeTag = sg.Now()
+		}
+		if nodeTag == "" {
+			return
+		}
+		// Extract target + isUDP from metadata for the short-life key.
+		target := ""
+		if meta.Metadata.Destination.Fqdn != "" {
+			target = meta.Metadata.Destination.Fqdn
+		} else if meta.Metadata.SniffHost != "" {
+			target = meta.Metadata.SniffHost
+		}
+		isUDP := meta.Metadata.Network == "udp"
+		sg.NotifyUserDisconnect(target, nodeTag, isUDP, "")
+		return
+	}
+}
+
 func getConnections(ctx context.Context, trafficManager *trafficcontrol.Manager) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Upgrade") != "websocket" {
@@ -173,11 +223,16 @@ func getConnections(ctx context.Context, trafficManager *trafficcontrol.Manager)
 	}
 }
 
-func closeConnection(trafficManager *trafficcontrol.Manager) func(w http.ResponseWriter, r *http.Request) {
+func closeConnection(ctx context.Context, trafficManager *trafficcontrol.Manager) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := uuid.FromStringOrNil(chi.URLParam(r, "id"))
 		targetConnection := trafficManager.Connection(id)
 		if targetConnection != nil {
+			// Notify any Smart group in the chain BEFORE closing so the
+			// short-life aggregator receives an explicit user-initiated
+			// disconnect signal. Without this, an API-only close was
+			// indistinguishable from a normal server FIN.
+			notifySmartUserDisconnect(ctx, targetConnection.Metadata())
 			targetConnection.Close()
 		}
 		render.NoContent(w, r)
@@ -186,6 +241,11 @@ func closeConnection(trafficManager *trafficcontrol.Manager) func(w http.Respons
 
 func closeAllConnections(ctx context.Context, network adapter.NetworkManager, trafficManager *trafficcontrol.Manager) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		for _, metadata := range trafficManager.Connections() {
+			// Every conn in the bulk close is user-initiated; feed Smart so
+			// a "close all" click also contributes to short-life counters.
+			notifySmartUserDisconnect(ctx, metadata)
+		}
 		trafficManager.CloseAllConnections()
 		network.ResetNetwork(ctx)
 		render.NoContent(w, r)
