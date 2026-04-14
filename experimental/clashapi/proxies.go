@@ -76,13 +76,23 @@ func proxyInfo(server *Server, detour adapter.Outbound) *badjson.JSONObject {
 	} else {
 		info.Put("history", []*adapter.URLTestHistory{})
 	}
-	if group, isGroup := detour.(adapter.OutboundGroup); isGroup {
+	if groupOutbound, isGroup := detour.(adapter.OutboundGroup); isGroup {
 		var now string
-		if selected := group.Selected(N.NetworkTCP); selected != nil {
+		if selected := groupOutbound.Selected(N.NetworkTCP); selected != nil {
 			now = selected.Tag()
 		}
 		info.Put("now", now)
-		info.Put("all", group.All())
+		info.Put("all", groupOutbound.All())
+
+		if sg, ok := detour.(*group.Smart); ok {
+			info.Put("testUrl", sg.TestURL())
+			info.Put("useASN", sg.UseASN())
+			info.Put("useLightGBM", sg.UseLightGBM())
+			info.Put("collectData", sg.CollectData())
+			if age := sg.LGBMModelAge(); age > 0 {
+				info.Put("lgbmModelAge", age.Truncate(time.Second).String())
+			}
+		}
 	}
 	return &info
 }
