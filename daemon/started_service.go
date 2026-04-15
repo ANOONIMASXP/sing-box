@@ -766,14 +766,26 @@ func (s *StartedService) SelectOutbound(ctx context.Context, request *SelectOutb
 	}
 	outboundGroup, isLoaded := boxService.outboundManager.Outbound(request.GroupTag)
 	if !isLoaded {
-		return nil, status.Error(codes.NotFound, "selector not found: "+request.GroupTag)
+		return nil, status.Error(codes.NotFound, "group not found: "+request.GroupTag)
 	}
-	selector, isSelector := outboundGroup.(*group.Selector)
-	if !isSelector {
-		return nil, status.Error(codes.InvalidArgument, "outbound is not a selector: "+request.GroupTag)
-	}
-	if !selector.SelectOutbound(request.OutboundTag) {
-		return nil, status.Error(codes.NotFound, "outbound not found in selector: "+request.OutboundTag)
+	// Mobile clients (Android / iOS) reach this RPC when the user taps a
+	// node in a group card. Historically only Selector was accepted, so
+	// pinning a node inside a Smart group either errored or the app UI
+	// silently reverted — matching the user report that "the pin is
+	// immediately cleared". Smart exposes the same SelectOutbound API
+	// with mihomo-parity semantics (empty tag releases the pin), so we
+	// route to it the same way the Clash API updateProxy handler does.
+	switch grp := outboundGroup.(type) {
+	case *group.Selector:
+		if !grp.SelectOutbound(request.OutboundTag) {
+			return nil, status.Error(codes.NotFound, "outbound not found in selector: "+request.OutboundTag)
+		}
+	case *group.Smart:
+		if !grp.SelectOutbound(request.OutboundTag) {
+			return nil, status.Error(codes.NotFound, "outbound not found in smart group: "+request.OutboundTag)
+		}
+	default:
+		return nil, status.Error(codes.InvalidArgument, "outbound is not a selectable group: "+request.GroupTag)
 	}
 	return &emptypb.Empty{}, nil
 }

@@ -210,6 +210,20 @@ type OutboundGroup interface {
 	All() []string
 	Selected(network string) Outbound
 	AttachConnection(closer io.Closer) (detach func())
+
+	// Hidden reports the dashboard hint set in option.GroupCommonOption.
+	// Returning true tells Clash-style front-ends to keep this group out
+	// of the proxy switcher; routing rules continue to work either way.
+	// All four built-in groups (Selector / URLTest / LoadBalance /
+	// Smart) implement this — third-party group implementations should
+	// return false when no hint is configured.
+	Hidden() bool
+
+	// Icon returns the opaque dashboard icon string from
+	// option.GroupCommonOption (URL / data URI / emoji). Empty means
+	// "no icon configured" and front-ends should fall back to their
+	// default rendering.
+	Icon() string
 }
 
 // ConnectionOutboundGroup selects a member for a particular connection rather
