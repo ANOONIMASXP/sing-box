@@ -122,12 +122,13 @@ func (s *RemoteRuleSet) StartContext(ctx context.Context, startContext *adapter.
 			loadedFromInitialPath = true
 		}
 	}
+	// 初次 fetch 失败不再 fatal。场景 = 订阅源 HTTP 5xx / DNS 解析失败
+	// / detour 出站还没就绪等所有可恢复故障。rule-set 保持空规则，route
+	// 层匹配到该 rule-set 的规则直接 miss 不命中，下一条规则或 default
+	// outbound 兜底。loopUpdate 周期性重试，上游恢复后自动补齐。
 	if !loadedFromCache && !loadedFromInitialPath {
-		err = s.fetch(ctx, true)
-		if err != nil {
-			return E.Cause(err, "initial rule-set: ", s.tag)
-		}
-	}
+		if err := s.fetch(ctx, true); err != nil {
+			s.logger.Warn(E.Cause(err, "initial rule-set [", s.tag, "], will retry in background"))
 	return nil
 }
 

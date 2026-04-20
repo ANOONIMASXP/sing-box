@@ -186,12 +186,18 @@ func (s *ProviderRemote) StartContext(ctx context.Context, startContext *adapter
 	}
 	startContext.Register(transport)
 	s.httpClient = &http.Client{Transport: transport}
+	// 初次 fetch 失败不再 fatal。场景:
+	//   - 订阅服务端 5xx 临时故障
+	//   - DNS 解析失败（机器刚开机网卡还没拿到地址）
+	//   - detour 出站自身还没就绪
+	// 这些都是可恢复的，不应该阻止 sing-box 启动。
+	// 节点列表保持为空（或 cache 里的旧值），Smart / urltest 组会看到 0 个
+	// 可用节点，route 层面走 fallback / default outbound。
+	// loopUpdate 会按 update_interval 周期性重试，恢复后自动上线。
 	if !loadedFromCache && !loadedFromInitialPath {
-		err = s.fetch(ctx, true)
-		if err != nil {
-			return E.Cause(err, "initial outbound provider: ", s.Tag())
+		if err := s.fetch(ctx, true); err != nil {
+			s.logger.Warn(E.Cause(err, "initial outbound provider [", s.Tag(), "], will retry in background"))
 		}
-	}
 	if err := s.Adapter.Start(); err != nil {
 		return err
 	}
