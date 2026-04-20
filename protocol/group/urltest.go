@@ -54,6 +54,9 @@ type URLTest struct {
 	interruptExternalConnections bool
 	providerAccess               sync.Mutex
 	providerUpdateCheck          providerUpdateCheckScheduler
+	// expectedStatus mihomo 对齐的状态码 matcher。nil = 旧启发式。
+	// NewURLTest 时 Parse，失败阻断启动；loopCheckOutbounds 里每次探测透传。
+	expectedStatus *urltest.StatusMatcher
 
 	provider       adapter.ProviderManager
 	providers      map[string]adapter.Provider
@@ -102,6 +105,12 @@ func NewURLTest(ctx context.Context, router adapter.Router, logger log.ContextLo
 			maxDelay: time.Duration(options.Fallback.MaxDelay).Milliseconds(),
 		}
 	}
+	// 解析 expected_status。用户写错立即报错，避免启动后每次探测才发现。
+	matcher, err := urltest.ParseExpectedStatus(options.ExpectedStatus)
+	if err != nil {
+		return nil, err
+	}
+	outbound.expectedStatus = matcher
 	return outbound, nil
 }
 
@@ -152,7 +161,7 @@ func (s *URLTest) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 		s.tags = append(s.tags, detour.Tag())
 		outbounds = append(outbounds, detour)
 	}
-	group, err := NewURLTestGroup(s.ctx, s.outbound, s.logger, outbounds, s.link, s.interval, s.tolerance, s.idleTimeout, s.fallback, s.interruptExternalConnections)
+	group, err := NewURLTestGroup(s.ctx, s.outbound, s.logger, outbounds, s.link, s.interval, s.tolerance, s.idleTimeout, s.fallback, s.interruptExternalConnections, s.expectedStatus)
 	if err != nil {
 		return err
 	}
@@ -362,9 +371,13 @@ type URLTestGroup struct {
 	lastActive                   common.TypedValue[time.Time]
 
 	fallback URLTestFallback
+
+	// expectedStatus: 上层 URLTest.NewURLTest 在构造 group 之前解析好
+	// 再传进来；每次 URL 探测透传给 urltest.URLTestWithStatus。nil = 旧启发式。
+	expectedStatus *urltest.StatusMatcher
 }
 
-func NewURLTestGroup(ctx context.Context, outboundManager adapter.OutboundManager, logger log.Logger, outbounds []adapter.Outbound, link string, interval time.Duration, tolerance uint16, idleTimeout time.Duration, fallback URLTestFallback, interruptExternalConnections bool) (*URLTestGroup, error) {
+func NewURLTestGroup(ctx context.Context, outboundManager adapter.OutboundManager, logger log.Logger, outbounds []adapter.Outbound, link string, interval time.Duration, tolerance uint16, idleTimeout time.Duration, fallback URLTestFallback, interruptExternalConnections bool, expectedStatus *urltest.StatusMatcher) (*URLTestGroup, error) {
 	if interval == 0 {
 		interval = C.DefaultURLTestInterval
 	}
@@ -395,6 +408,7 @@ func NewURLTestGroup(ctx context.Context, outboundManager adapter.OutboundManage
 		pause:                        service.FromContext[pause.Manager](ctx),
 		interruptGroup:               interrupt.NewGroup(),
 		interruptExternalConnections: interruptExternalConnections,
+		expectedStatus:               expectedStatus,
 	}
 	group.storeOutbounds(outbounds)
 	return group, nil
@@ -558,6 +572,7 @@ func (g *URLTestGroup) urlTestWait(ctx context.Context, force bool) (map[string]
 
 func (g *URLTestGroup) urlTestLocked(ctx context.Context, force bool) (map[string]uint16, error) {
 	ctx = urltest.ContextWithUnifiedDelay(ctx, urltest.UnifiedDelayFromContext(g.ctx))
+	ctx = urltest.ContextWithStatusMatcher(ctx, g.expectedStatus)
 	result := URLTestOutbounds(ctx, g.outbound, g.history, g.logger, g.loadOutbounds(), g.link, g.interval, force)
 	select {
 	case <-ctx.Done():

@@ -62,6 +62,7 @@ type LoadBalance struct {
 	ttl                 time.Duration
 	group               *LoadBalanceGroup
 	strategy            string
+	expectedStatus      *urltest.StatusMatcher
 	providerAccess      sync.Mutex
 	providerUpdateCheck providerUpdateCheckScheduler
 
@@ -110,6 +111,11 @@ func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.Conte
 		hidden:          options.Hidden,
 		icon:            options.Icon,
 	}
+	matcher, err := urltest.ParseExpectedStatus(options.ExpectedStatus)
+	if err != nil {
+		return nil, err
+	}
+	outbound.expectedStatus = matcher
 	return outbound, nil
 }
 
@@ -160,7 +166,7 @@ func (s *LoadBalance) Start(stage adapter.StartStage, scope *adapter.Scope) erro
 		s.tags = append(s.tags, detour.Tag())
 		outbounds = append(outbounds, detour)
 	}
-	group, err := NewLoadBalanceGroup(s.ctx, s.outbound, s.logger, outbounds, s.link, s.interval, s.idleTimeout, s.ttl, s.strategy)
+	group, err := NewLoadBalanceGroup(s.ctx, s.outbound, s.logger, outbounds, s.link, s.interval, s.idleTimeout, s.ttl, s.strategy, s.expectedStatus)
 	if err != nil {
 		return err
 	}
@@ -360,9 +366,10 @@ type LoadBalanceGroup struct {
 	closed          bool
 	lastActive      common.TypedValue[time.Time]
 	strategyFn      strategyFn
+	expectedStatus  *urltest.StatusMatcher
 }
 
-func NewLoadBalanceGroup(ctx context.Context, outboundManager adapter.OutboundManager, logger log.Logger, outbounds []adapter.Outbound, link string, interval time.Duration, idleTimeout time.Duration, ttl time.Duration, strategy string) (*LoadBalanceGroup, error) {
+func NewLoadBalanceGroup(ctx context.Context, outboundManager adapter.OutboundManager, logger log.Logger, outbounds []adapter.Outbound, link string, interval time.Duration, idleTimeout time.Duration, ttl time.Duration, strategy string, expectedStatus *urltest.StatusMatcher) (*LoadBalanceGroup, error) {
 	if interval == 0 {
 		interval = C.DefaultURLTestInterval
 	}
@@ -394,6 +401,7 @@ func NewLoadBalanceGroup(ctx context.Context, outboundManager adapter.OutboundMa
 		close:          make(chan struct{}),
 		pause:          service.FromContext[pause.Manager](ctx),
 		interruptGroup: interrupt.NewGroup(),
+		expectedStatus: expectedStatus,
 	}
 	loadBalanceGroup.storeOutbounds(outbounds)
 	switch strategy {
@@ -501,6 +509,7 @@ func (g *LoadBalanceGroup) urlTestWait(ctx context.Context, force bool) (map[str
 
 func (g *LoadBalanceGroup) urlTestLocked(ctx context.Context, force bool) (map[string]uint16, error) {
 	ctx = urltest.ContextWithUnifiedDelay(ctx, urltest.UnifiedDelayFromContext(g.ctx))
+	ctx = urltest.ContextWithStatusMatcher(ctx, g.expectedStatus)
 	outbounds := g.loadOutbounds()
 	result := URLTestOutbounds(ctx, g.outbound, g.history, g.logger, outbounds, g.link, g.interval, force)
 	if g.tag != "" {
