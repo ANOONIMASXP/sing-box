@@ -780,6 +780,12 @@ func (s *StartedService) SelectOutbound(ctx context.Context, request *SelectOutb
 		if !grp.SelectOutbound(request.OutboundTag) {
 			return nil, status.Error(codes.NotFound, "outbound not found in selector: "+request.OutboundTag)
 		}
+	case *group.URLTest:
+		// URLTest's temporary manual pin — auto-released on the next
+		// user-triggered speed test. Empty tag clears the pin.
+		if !grp.SelectOutbound(request.OutboundTag) {
+			return nil, status.Error(codes.NotFound, "outbound not found in urltest: "+request.OutboundTag)
+		}
 	case *group.Smart:
 		if !grp.SelectOutbound(request.OutboundTag) {
 			return nil, status.Error(codes.NotFound, "outbound not found in smart group: "+request.OutboundTag)
@@ -787,6 +793,7 @@ func (s *StartedService) SelectOutbound(ctx context.Context, request *SelectOutb
 	default:
 		return nil, status.Error(codes.InvalidArgument, "outbound is not a selectable group: "+request.GroupTag)
 	}
+	s.urlTestObserver.Emit(struct{}{})
 	return &emptypb.Empty{}, nil
 }
 
