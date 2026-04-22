@@ -38,13 +38,13 @@ type manualPinData struct {
 }
 
 const (
-	maxScreeningConcurrency = 16 // Phase 1: coarse screening — balanced speed vs memory
-	maxPrecisionConcurrency = 2  // Phase 2: precision retest — minimal concurrency for accuracy
+	maxScreeningConcurrency = 16 // Phase 1: coarse screening �?balanced speed vs memory
+	maxPrecisionConcurrency = 2  // Phase 2: precision retest �?minimal concurrency for accuracy
 	maxPrecisionCandidates  = 8  // Number of top candidates to retest
 	maxFailoverCandidates   = 10
 
 	// Consecutive health-check failures before we stop trusting a node.
-	// Unlike mihomo, we don't delete history — we mark it stale by zeroing delay.
+	// Unlike mihomo, we don't delete history �?we mark it stale by zeroing delay.
 	// This keeps the node in the ranked list for failover but deprioritizes it.
 	healthCheckFailThreshold = 3
 
@@ -82,8 +82,8 @@ type URLTest struct {
 	interruptExternalConnections bool
 	providerAccess               sync.Mutex
 	providerUpdateCheck          providerUpdateCheckScheduler
-	// expectedStatus mihomo 对齐的状态码 matcher。nil = 旧启发式。
-	// NewURLTest 时 Parse，失败阻断启动；loopCheckOutbounds 里每次探测透传。
+	// expectedStatus mihomo 对齝的状思砝 matcher。nil = 旧坯坑弝�?
+	// NewURLTest �?Parse，失败阻断坯动；loopCheckOutbounds 里毝次探测逝传�?
 	expectedStatus *urltest.StatusMatcher
 
 	provider       adapter.ProviderManager
@@ -133,7 +133,7 @@ func NewURLTest(ctx context.Context, router adapter.Router, logger log.ContextLo
 			maxDelay: time.Duration(options.Fallback.MaxDelay).Milliseconds(),
 		}
 	}
-	// 解析 expected_status。用户写错立即报错，避免启动后每次探测才发现。
+	// 解枝 expected_status。用户写错立坳报错，靿兝坯动坎毝次探测扝坑现�?
 	matcher, err := urltest.ParseExpectedStatus(options.ExpectedStatus)
 	if err != nil {
 		return nil, err
@@ -150,7 +150,9 @@ func (s *URLTest) Icon() string { return s.icon }
 func (s *URLTest) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	if stage != adapter.StartStateStart {
 		if stage == adapter.StartStateStarted {
-			s.group.PostStart()
+			if err := s.PostStart(); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -203,6 +205,74 @@ func (s *URLTest) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	return nil
 }
 
+func (s *URLTest) PostStart() error {
+	// Restore the manually-pinned outbound (if any) from CacheFile before
+	// the group starts dispatching dials. Mirrors Selector's
+	// cacheFile.LoadSelected path but only applies when the pinned tag
+	// still exists in the current snapshot (a re-subscribe may have
+	// dropped it; in that case we silently fall back to auto-selection
+	// rather than dialling a vanished node).
+	//
+	// Why at PostStart and not Start: the group's state is populated in
+	// Start; PostStart is the earliest point at which findOutboundByTag
+	// can resolve the pin tag. Reloading here also means the
+	// user-visible Now() / Selected() reflect the pin immediately after
+	// startup, before any health-check runs.
+	if s.Tag() != "" {
+		if cacheFile := service.FromContext[adapter.CacheFile](s.ctx); cacheFile != nil {
+			if saved := cacheFile.LoadSelected(s.Tag()); saved != "" {
+				if detour := s.group.findOutboundByTag(saved); detour != nil {
+					s.group.manualPin.Store(&manualPinData{tag: saved, outbound: detour})
+					// Pre-seed the cached selectedOutboundTCP/UDP so the very
+					// first DialContext after startup sees the pin even
+					// before Select() runs. Network-gated to avoid poisoning
+					// the other-network slot.
+					if common.Contains(detour.Network(), N.NetworkTCP) {
+						s.group.selectedOutboundTCP.Store(detour)
+					}
+					if common.Contains(detour.Network(), N.NetworkUDP) {
+						s.group.selectedOutboundUDP.Store(detour)
+					}
+					s.logger.Info("restored manual pin [", saved, "] from cache")
+				} else {
+					// Pin target removed from the group (provider dropped the
+					// tag or config changed). Wipe the stale entry so a future
+					// restart won't keep attempting to restore a ghost.
+					_ = cacheFile.StoreSelected(s.Tag(), "")
+					s.logger.Debug("cached manual pin [", saved,
+						"] no longer present in snapshot, cleared")
+				}
+			}
+		}
+	}
+	s.group.PostStart()
+	return nil
+}
+
+// persistManualPin writes the pin tag to CacheFile so it survives core
+// restart. Empty tag clears the persisted entry (auto-selection resumes
+// after the next restart). Errors are logged but not propagated �?
+// persistence failure degrades to "temporary pin" gracefully rather than
+// breaking the user-facing SelectOutbound call.
+func (s *URLTest) persistManualPin(tag string) {
+	if s.Tag() == "" {
+		return
+	}
+	cacheFile := service.FromContext[adapter.CacheFile](s.ctx)
+	if cacheFile == nil {
+		return
+	}
+	if err := cacheFile.StoreSelected(s.Tag(), tag); err != nil {
+		s.logger.Error("persist manual pin: ", err)
+	}
+}
+
+func (s *URLTest) Close() error {
+	return common.Close(
+		common.PtrOrNil(s.group),
+	)
+}
+
 // Now returns the pin tag if set, otherwise the cached per-network selection.
 // Mirrors mihomo's Now() so Clash-API consumers can read the effective member
 // uniformly across group types.
@@ -244,6 +314,13 @@ func (s *URLTest) SelectOutbound(tag string) bool {
 				s.group.interruptGroup.Interrupt(true)
 			}
 		}
+		// Persist the cleared state unconditionally (even when there was
+		// no in-memory pin) �?after a restart with a previously persisted
+		// pin, clearManualPin would return false (no in-memory state)
+		// but we still need to wipe the cache entry so auto-selection
+		// really takes over next boot. Persist idempotent so redundant
+		// writes are cheap.
+		s.persistManualPin("")
 		return true
 	}
 	detour := s.group.findOutboundByTag(tag)
@@ -251,6 +328,10 @@ func (s *URLTest) SelectOutbound(tag string) bool {
 		return false
 	}
 	prev := s.group.manualPin.Swap(&manualPinData{tag: tag, outbound: detour})
+	// Persist even when prev.outbound == detour �?restart resilience
+	// takes priority over skipping a no-op disk write; StoreSelected is
+	// cheap (bbolt key-value write, bounded by disk cache flush).
+	s.persistManualPin(tag)
 	if prev != nil && prev.outbound == detour {
 		return true
 	}
@@ -323,11 +404,17 @@ func (s *URLTest) SelectPreMatchOutbound(metadata *adapter.InboundContext, selec
 }
 
 func (s *URLTest) URLTest(ctx context.Context) (map[string]uint16, error) {
-	// User-triggered manual test — release the manual pin so selection
+	// User-triggered manual test �?release the manual pin so selection
 	// returns to the best measured node after this cycle completes.
+	// Persist the cleared state too, otherwise the pin would come back
+	// on next core restart (cached tag still pointing at the released
+	// node). Persist is idempotent so calling on every user test is
+	// cheap and matches the "release on next manual speedtest" contract
+	// even across restarts.
 	if s.group.clearManualPin() {
 		s.logger.Info("manual pin released by user speed test")
 	}
+	s.persistManualPin("")
 	return s.group.URLTest(ctx)
 }
 
@@ -336,11 +423,12 @@ func (s *URLTest) urlTest(ctx context.Context, force bool) (map[string]uint16, e
 }
 
 func (s *URLTest) CheckOutbounds() {
-	// User-triggered via gRPC/libbox — release the manual pin before
+	// User-triggered via gRPC/libbox �?release the manual pin before
 	// running. Internal callers use g.CheckOutbounds directly and must
 	// preserve the pin.
 	if s.group.clearManualPin() {
 		s.logger.Info("manual pin released by user speed test")
+		s.persistManualPin("")
 	}
 	s.group.CheckOutbounds(s.ctx, true)
 }
@@ -454,9 +542,9 @@ func (s *URLTest) onProviderUpdated(tag string) error {
 			s.group.ticker.Reset(s.group.interval)
 		}
 		s.group.access.Unlock()
-		s.providerUpdateCheck.Schedule(func() {
+	s.providerUpdateCheck.Schedule(func() {
 			_, _ = s.group.urlTestWait(s.ctx, false)
-		})
+	s})
 	}
 	return nil
 }
@@ -488,8 +576,8 @@ type URLTestGroup struct {
 
 	fallback URLTestFallback
 
-	// expectedStatus: 上层 URLTest.NewURLTest 在构造 group 之前解析好
-	// 再传进来；每次 URL 探测透传给 urltest.URLTestWithStatus。nil = 旧启发式。
+	// expectedStatus: 上层 URLTest.NewURLTest 在构�?group 之剝解枝�?
+	// 冝传进来；毝�?URL 探测逝传�?urltest.URLTestWithStatus。nil = 旧坯坑弝�?
 	expectedStatus *urltest.StatusMatcher
 
 	// manualPin: user's temporary manual selection. nil = auto.
