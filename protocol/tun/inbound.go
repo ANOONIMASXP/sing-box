@@ -481,7 +481,7 @@ func (t *Inbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 		}
 		monitor.Start("open interface")
 		if t.usePlatformInterface {
-			tunInterface, err = t.platformInterface.OpenInterface(&tunOptions, t.platformOptions)
+			tunInterface, err = t.platformInterface.OpenInterface(&tunOptions, t.platformOptions, t.platformOptions.AndroidVPNRouteBypass)
 		} else {
 			tunInterface, err = tun.New(tunOptions)
 		}
