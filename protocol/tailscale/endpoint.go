@@ -22,6 +22,7 @@ import (
 	"github.com/sagernet/sing-box/adapter/endpoint"
 	"github.com/sagernet/sing-box/common/dialer"
 	"github.com/sagernet/sing-box/common/iponly"
+	"github.com/sagernet/sing-box/common/udpgso"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/dns"
 	"github.com/sagernet/sing-box/log"
@@ -129,10 +130,12 @@ type Endpoint struct {
 	systemDialer        *dialer.DefaultDialer
 
 	innerDNSQueryOptions adapter.DNSQueryOptions
-	tcpConcurrent        dialer.TCPConcurrentPolicy
 }
 
 func NewEndpoint(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.TailscaleEndpointOptions) (adapter.Endpoint, error) {
+	if err := options.TCPCongestionControl.Validate(); err != nil {
+		return nil, err
+	}
 	stateDirectory := options.StateDirectory
 	if stateDirectory == "" {
 		stateDirectory = "tailscale"
@@ -207,12 +210,14 @@ func NewEndpoint(ctx context.Context, router adapter.Router, logger log.ContextL
 			UserLogf: func(format string, args ...any) {
 				logger.Debug(fmt.Sprintf(format, args...))
 			},
-			Ephemeral:     options.Ephemeral,
-			AuthKey:       options.AuthKey,
-			ControlURL:    options.ControlURL,
-			Port:          options.ListenPort,
-			AdvertiseTags: options.AdvertiseTags,
-			Dialer:        &endpointDialer{Dialer: outboundDialer, logger: logger},
+			Ephemeral:                    options.Ephemeral,
+			AuthKey:                      options.AuthKey,
+			ControlURL:                   options.ControlURL,
+			Port:                         options.ListenPort,
+			AdvertiseTags:                options.AdvertiseTags,
+			Dialer:                       &endpointDialer{Dialer: outboundDialer, logger: logger},
+			DisableUDPGSO:                udpgso.Disabled(options.UDPGSO),
+			NetstackTCPCongestionControl: string(options.TCPCongestionControl),
 			LookupHook: func(ctx context.Context, host string) ([]netip.Addr, error) {
 				return dnsRouter.Lookup(ctx, host, dialerQueryOptions)
 			},
@@ -247,7 +252,6 @@ func NewEndpoint(ctx context.Context, router adapter.Router, logger log.ContextL
 		keyAuth:                    options.AuthKey != "",
 		onDemand:                   options.OnDemand,
 	}
-	tailscaleEndpoint.tcpConcurrent = dialer.NewTCPConcurrentPolicy(ctx, options.TCPConcurrent)
 	if options.InnerDomainResolver != nil {
 		innerDNSOpts, err := dialer.NewInnerDNSQueryOptions(ctx, options.InnerDomainResolver)
 		if err != nil {
@@ -777,43 +781,8 @@ func (t *Endpoint) DialContext(ctx context.Context, network string, destination 
 		if err != nil {
 			return nil, err
 		}
-		return dialer.DialSerialConcurrent(ctx, t.tcpConcurrent, (*tailscaleAddressDialer)(t), network, destination, destinationAddresses)
+		return N.DialSerial(ctx, t, network, destination, destinationAddresses)
 	}
-	return t.dialAddress(ctx, network, destination)
-}
-
-// DialParallel dials route-resolved addresses through Tailscale and races them
-// with dns.tcp_concurrent.
-func (t *Endpoint) DialParallel(ctx context.Context, network string, destination M.Socksaddr, destinationAddresses []netip.Addr) (net.Conn, error) {
-	switch N.NetworkName(network) {
-	case N.NetworkTCP:
-		t.logger.InfoContext(ctx, "outbound connection to ", destination)
-	case N.NetworkUDP:
-		t.logger.InfoContext(ctx, "outbound packet connection to ", destination)
-	}
-	if !t.started.Load() {
-		return nil, E.New("Tailscale is not ready yet")
-	}
-	resumeErr := t.resume(ctx)
-	if resumeErr != nil {
-		return nil, resumeErr
-	}
-	return dialer.DialSerialConcurrent(ctx, t.tcpConcurrent, (*tailscaleAddressDialer)(t), network, destination, destinationAddresses)
-}
-
-// tailscaleAddressDialer dials single addresses for a ready endpoint, without
-// logging every attempt of a race.
-type tailscaleAddressDialer Endpoint
-
-func (d *tailscaleAddressDialer) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
-	return (*Endpoint)(d).dialAddress(ctx, network, destination)
-}
-
-func (d *tailscaleAddressDialer) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	return (*Endpoint)(d).ListenPacket(ctx, destination)
-}
-
-func (t *Endpoint) dialAddress(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	if t.systemDialer != nil {
 		return t.systemDialer.DialContext(ctx, network, destination)
 	}
