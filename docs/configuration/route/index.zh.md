@@ -157,7 +157,7 @@ Android 命令行模式优先通过 socket UID 识别应用包名。仅为日志
 
 !!! question "自 sing-box 1.14.0 起"
 
-远程规则集使用的默认 [HTTP 客户端](/zh/configuration/shared/http-client/) 的标签。
+资源下载使用的默认 [HTTP 客户端](/zh/configuration/shared/http-client/) 的标签。
 
 如果为空且 `http_clients` 已定义，将使用第一个 HTTP 客户端。
 
