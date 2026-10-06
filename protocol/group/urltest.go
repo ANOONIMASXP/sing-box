@@ -38,13 +38,13 @@ type manualPinData struct {
 }
 
 const (
-	maxScreeningConcurrency = 16 // Phase 1: coarse screening �?balanced speed vs memory
-	maxPrecisionConcurrency = 2  // Phase 2: precision retest �?minimal concurrency for accuracy
+	maxScreeningConcurrency = 16 // Phase 1: coarse screening �?balanced speed vs memory
+	maxPrecisionConcurrency = 2  // Phase 2: precision retest �?minimal concurrency for accuracy
 	maxPrecisionCandidates  = 8  // Number of top candidates to retest
 	maxFailoverCandidates   = 10
 
 	// Consecutive health-check failures before we stop trusting a node.
-	// Unlike mihomo, we don't delete history �?we mark it stale by zeroing delay.
+	// Unlike mihomo, we don't delete history �?we mark it stale by zeroing delay.
 	// This keeps the node in the ranked list for failover but deprioritizes it.
 	healthCheckFailThreshold = 3
 
@@ -82,8 +82,8 @@ type URLTest struct {
 	interruptExternalConnections bool
 	providerAccess               sync.Mutex
 	providerUpdateCheck          providerUpdateCheckScheduler
-	// expectedStatus mihomo 对齝的状思砝 matcher。nil = 旧坯坑弝�?
-	// NewURLTest �?Parse，失败阻断坯动；loopCheckOutbounds 里毝次探测逝传�?
+	// expectedStatus mihomo 对齝的状思砝 matcher。nil = 旧坯坑弝�?
+	// NewURLTest �?Parse，失败阻断坯动；loopCheckOutbounds 里毝次探测逝传�?
 	expectedStatus *urltest.StatusMatcher
 
 	provider       adapter.ProviderManager
@@ -133,7 +133,7 @@ func NewURLTest(ctx context.Context, router adapter.Router, logger log.ContextLo
 			maxDelay: time.Duration(options.Fallback.MaxDelay).Milliseconds(),
 		}
 	}
-	// 解枝 expected_status。用户写错立坳报错，靿兝坯动坎毝次探测扝坑现�?
+	// 解枝 expected_status。用户写错立坳报错，靿兝坯动坎毝次探测扝坑现�?
 	matcher, err := urltest.ParseExpectedStatus(options.ExpectedStatus)
 	if err != nil {
 		return nil, err
@@ -251,7 +251,7 @@ func (s *URLTest) PostStart() error {
 
 // persistManualPin writes the pin tag to CacheFile so it survives core
 // restart. Empty tag clears the persisted entry (auto-selection resumes
-// after the next restart). Errors are logged but not propagated �?
+// after the next restart). Errors are logged but not propagated �?
 // persistence failure degrades to "temporary pin" gracefully rather than
 // breaking the user-facing SelectOutbound call.
 func (s *URLTest) persistManualPin(tag string) {
@@ -315,7 +315,7 @@ func (s *URLTest) SelectOutbound(tag string) bool {
 			}
 		}
 		// Persist the cleared state unconditionally (even when there was
-		// no in-memory pin) �?after a restart with a previously persisted
+		// no in-memory pin) �?after a restart with a previously persisted
 		// pin, clearManualPin would return false (no in-memory state)
 		// but we still need to wipe the cache entry so auto-selection
 		// really takes over next boot. Persist idempotent so redundant
@@ -328,7 +328,7 @@ func (s *URLTest) SelectOutbound(tag string) bool {
 		return false
 	}
 	prev := s.group.manualPin.Swap(&manualPinData{tag: tag, outbound: detour})
-	// Persist even when prev.outbound == detour �?restart resilience
+	// Persist even when prev.outbound == detour �?restart resilience
 	// takes priority over skipping a no-op disk write; StoreSelected is
 	// cheap (bbolt key-value write, bounded by disk cache flush).
 	s.persistManualPin(tag)
@@ -404,7 +404,7 @@ func (s *URLTest) SelectPreMatchOutbound(metadata *adapter.InboundContext, selec
 }
 
 func (s *URLTest) URLTest(ctx context.Context) (map[string]uint16, error) {
-	// User-triggered manual test �?release the manual pin so selection
+	// User-triggered manual test �?release the manual pin so selection
 	// returns to the best measured node after this cycle completes.
 	// Persist the cleared state too, otherwise the pin would come back
 	// on next core restart (cached tag still pointing at the released
@@ -423,7 +423,7 @@ func (s *URLTest) urlTest(ctx context.Context, force bool) (map[string]uint16, e
 }
 
 func (s *URLTest) CheckOutbounds() {
-	// User-triggered via gRPC/libbox �?release the manual pin before
+	// User-triggered via gRPC/libbox �?release the manual pin before
 	// running. Internal callers use g.CheckOutbounds directly and must
 	// preserve the pin.
 	if s.group.clearManualPin() {
@@ -487,6 +487,9 @@ func (s *URLTest) DialContext(ctx context.Context, network string, destination M
 	}
 	conn, err := outbound.DialContext(ctx, network, destination)
 	if err == nil {
+	conn, err := outbound.DialContext(ctx, network, destination)
+	if err == nil {
+		adapter.RecordGroupDial(ctx, s.Tag(), outbound)
 		return s.group.interruptGroup.NewConn(conn, interrupt.IsExternalConnectionFromContext(ctx), interrupt.IsResourceDownloadFromContext(ctx)), nil
 	}
 	s.logger.ErrorContext(ctx, err)
@@ -510,6 +513,9 @@ func (s *URLTest) ListenPacket(ctx context.Context, destination M.Socksaddr) (ne
 	}
 	conn, err := outbound.ListenPacket(ctx, destination)
 	if err == nil {
+	conn, err := outbound.ListenPacket(ctx, destination)
+	if err == nil {
+		adapter.RecordGroupDial(ctx, s.Tag(), outbound)
 		return s.group.interruptGroup.NewPacketConn(conn, interrupt.IsExternalConnectionFromContext(ctx), interrupt.IsResourceDownloadFromContext(ctx)), nil
 	}
 	s.logger.ErrorContext(ctx, err)
@@ -576,8 +582,8 @@ type URLTestGroup struct {
 
 	fallback URLTestFallback
 
-	// expectedStatus: 上层 URLTest.NewURLTest 在构�?group 之剝解枝�?
-	// 冝传进来；毝�?URL 探测逝传�?urltest.URLTestWithStatus。nil = 旧坯坑弝�?
+	// expectedStatus: 上层 URLTest.NewURLTest 在构�?group 之剝解枝�?
+	// 冝传进来；毝�?URL 探测逝传�?urltest.URLTestWithStatus。nil = 旧坯坑弝�?
 	expectedStatus *urltest.StatusMatcher
 
 	// manualPin: user's temporary manual selection. nil = auto.
