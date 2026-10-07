@@ -45,7 +45,8 @@ type SmartService interface {
 //
 // Other services (currently only Smart group, via use_asn) retrieve local
 // file paths through this service when their per-group config leaves the
-// corresponding path empty.
+// corresponding path empty. Databases opened through common/geodb are
+// reloaded in place whenever GeoX downloads a new copy.
 type GeoXService interface {
 	LifecycleService
 
@@ -66,6 +67,14 @@ type GeoXService interface {
 	// ASNPaths returns every configured ASN mmdb path in priority order.
 	// Empty slice when no ASN URL is configured.
 	ASNPaths() []string
+
+	// RequireDefaultASN and RequireDefaultMMDB return the path of the
+	// built-in default ASN / country database, for consumers that need one
+	// the configuration does not provide. The first call starts downloading
+	// it with GeoX's http client and update settings, whether or not GeoX
+	// is enabled.
+	RequireDefaultASN() string
+	RequireDefaultMMDB() string
 }
 
 type CacheFile interface {
