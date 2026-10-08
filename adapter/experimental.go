@@ -10,12 +10,24 @@ import (
 	"github.com/sagernet/bbolt"
 	"github.com/sagernet/sing-box/common/hash"
 	E "github.com/sagernet/sing/common/exceptions"
+	"github.com/sagernet/sing/common/observable"
 	"github.com/sagernet/sing/common/varbin"
 )
 
 type URLTestHistory struct {
 	Time  time.Time `json:"time"`
 	Delay uint16    `json:"delay"`
+}
+
+// URLTestHistoryStorage is the delay-history store shared by URLTest /
+// LoadBalance / Smart groups and the Clash API / observability hooks.
+type URLTestHistoryStorage interface {
+	AddUpdateHook(hook *observable.Subscriber[struct{}])
+	NotifyUpdated()
+	LoadURLTestHistory(tag string) *URLTestHistory
+	DeleteURLTestHistory(tag string)
+	StoreURLTestHistory(tag string, history *URLTestHistory)
+	Close() error
 }
 
 type V2RayServer interface {

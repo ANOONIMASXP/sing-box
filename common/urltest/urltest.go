@@ -3,12 +3,16 @@ package urltest
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
+	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
+	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sagernet/sing-anytls"
@@ -18,6 +22,7 @@ import (
 	"github.com/sagernet/sing-mux"
 	"github.com/sagernet/sing-snell"
 	"github.com/sagernet/sing/common"
+	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/ntp"
@@ -42,10 +47,10 @@ func UnifiedDelayFromContext(ctx context.Context) bool {
 type statusMatcherKey struct{}
 
 // ContextWithStatusMatcher propagates the expected-status matcher through
-// probe chains that cannot thread an explicit parameter (recursive
-// URLTestOutbounds, daemon RPCs, ...). An explicit matcher argument on
-// URLTestWithStatus / URLTestWithDetailAndStatus always wins over the
-// context value.
+// probe chains that cannot thread an explicit parameter (the LoadBalance
+// batch probes go through URLTestOutbounds with the group's context). An
+// explicit matcher argument on URLTestWithStatus /
+// URLTestWithDetailAndStatus always wins over the context value.
 func ContextWithStatusMatcher(ctx context.Context, matcher *StatusMatcher) context.Context {
 	if matcher == nil {
 		return ctx
@@ -54,7 +59,8 @@ func ContextWithStatusMatcher(ctx context.Context, matcher *StatusMatcher) conte
 }
 
 // StatusMatcherFromContext returns the expected-status matcher bound to ctx,
-// or nil when no group configured one (legacy behaviour: accept any status).
+// or nil when no group configured one (legacy behaviour: heuristic
+// generate_204 / <400 validation).
 func StatusMatcherFromContext(ctx context.Context) *StatusMatcher {
 	if ctx == nil {
 		return nil
@@ -63,10 +69,168 @@ func StatusMatcherFromContext(ctx context.Context) *StatusMatcher {
 	return matcher
 }
 
-// URLTestDetail carries per-phase timings and kernel counters collected
-// during a single probe. Fields the platform / dialer cannot observe
-// (DNS via remote proxy, TCP counters on non-Linux or behind wrapped
-// connections) stay zero.
+// ════════════════ HistoryStorage ════════════════
+
+var _ adapter.URLTestHistoryStorage = (*HistoryStorage)(nil)
+
+type HistoryStorage struct {
+	delayHistory sync.Map
+	updateHooks  []*observable.Subscriber[struct{}]
+	hookAccess   sync.Mutex
+
+	notifyAccess  sync.Mutex
+	notifyPending bool
+	lastNotify    time.Time
+}
+
+// historyNotifyInterval coalesces store/delete notifications: a health
+// check stores one result per member, and every notification makes the
+// subscribers (reference tracking, dashboard pushes) walk all outbounds.
+const historyNotifyInterval = 200 * time.Millisecond
+
+func NewHistoryStorage() *HistoryStorage { return &HistoryStorage{} }
+
+func (s *HistoryStorage) AddUpdateHook(hook *observable.Subscriber[struct{}]) {
+	s.hookAccess.Lock()
+	defer s.hookAccess.Unlock()
+	s.updateHooks = append(s.updateHooks, hook)
+}
+
+func (s *HistoryStorage) NotifyUpdated() {
+	s.hookAccess.Lock()
+	hooks := s.updateHooks
+	s.hookAccess.Unlock()
+	for _, h := range hooks {
+		h.Emit(struct{}{})
+	}
+}
+
+func (s *HistoryStorage) LoadURLTestHistory(tag string) *adapter.URLTestHistory {
+	if s == nil {
+		return nil
+	}
+	v, ok := s.delayHistory.Load(tag)
+	if !ok {
+		return nil
+	}
+	return v.(*adapter.URLTestHistory)
+}
+
+func (s *HistoryStorage) DeleteURLTestHistory(tag string) {
+	s.delayHistory.Delete(tag)
+	s.notifyUpdated()
+}
+
+func (s *HistoryStorage) StoreURLTestHistory(tag string, h *adapter.URLTestHistory) {
+	s.delayHistory.Store(tag, h)
+	s.notifyUpdated()
+}
+
+// notifyUpdated emits right away when the last emission is older than
+// historyNotifyInterval, and otherwise schedules a single trailing emission.
+func (s *HistoryStorage) notifyUpdated() {
+	s.notifyAccess.Lock()
+	if s.notifyPending {
+		s.notifyAccess.Unlock()
+		return
+	}
+	wait := historyNotifyInterval - time.Since(s.lastNotify)
+	if wait <= 0 {
+		s.lastNotify = time.Now()
+		s.notifyAccess.Unlock()
+		s.NotifyUpdated()
+		return
+	}
+	s.notifyPending = true
+	s.notifyAccess.Unlock()
+	time.AfterFunc(wait, func() {
+		s.notifyAccess.Lock()
+		s.notifyPending = false
+		s.lastNotify = time.Now()
+		s.notifyAccess.Unlock()
+		s.NotifyUpdated()
+	})
+}
+
+func (s *HistoryStorage) Close() error {
+	s.hookAccess.Lock()
+	s.updateHooks = nil
+	s.hookAccess.Unlock()
+	return nil
+}
+
+// ════════════════ TLS session cache ════════════════
+
+// sessionCache wraps a tls.ClientSessionCache with a last-access timestamp
+// for LRU eviction. The cache itself is goroutine-safe (stdlib guarantee).
+type sessionCache struct {
+	cache      tls.ClientSessionCache
+	lastAccess atomic.Int64 // UnixNano
+}
+
+func (s *sessionCache) touch() {
+	s.lastAccess.Store(time.Now().UnixNano())
+}
+
+const (
+	sessionCacheMaxEntries = 256
+	sessionCacheExpiry     = 30 * time.Minute
+)
+
+var sessionCaches sync.Map // hostname → *sessionCache
+
+func sessionCacheFor(hostname string) tls.ClientSessionCache {
+	if v, ok := sessionCaches.Load(hostname); ok {
+		sc := v.(*sessionCache)
+		sc.touch()
+		return sc.cache
+	}
+	sc := &sessionCache{cache: tls.NewLRUClientSessionCache(8)}
+	sc.touch()
+	if actual, loaded := sessionCaches.LoadOrStore(hostname, sc); loaded {
+		return actual.(*sessionCache).cache
+	}
+	return sc.cache
+}
+
+// PruneSessionCaches removes entries not accessed within sessionCacheExpiry
+// and caps the total at sessionCacheMaxEntries. Called from group Close()
+// or periodically by long-lived services.
+func PruneSessionCaches() {
+	now := time.Now().UnixNano()
+	cutoff := now - int64(sessionCacheExpiry)
+	var count int
+	sessionCaches.Range(func(key, value any) bool {
+		count++
+		sc := value.(*sessionCache)
+		if sc.lastAccess.Load() < cutoff {
+			sessionCaches.Delete(key)
+			count--
+		}
+		return true
+	})
+	if count > sessionCacheMaxEntries {
+		oldest := now
+		var oldestKey any
+		sessionCaches.Range(func(key, value any) bool {
+			sc := value.(*sessionCache)
+			if t := sc.lastAccess.Load(); t < oldest {
+				oldest = t
+				oldestKey = key
+			}
+			return true
+		})
+		if oldestKey != nil {
+			sessionCaches.Delete(oldestKey)
+		}
+	}
+}
+
+// ════════════════ URLTestDetail ════════════════
+
+// URLTestDetail captures per-phase timings for callers that need them
+// (Smart group's recordStats, LightGBM feature extractor, sticky-session
+// signal). All fields measure pure phase duration, never cumulative.
 type URLTestDetail struct {
 	TCPConnectMS   int64
 	TLSHandshakeMS int64
@@ -79,86 +243,24 @@ type URLTestDetail struct {
 	PathMTU            uint32
 }
 
-type HistoryStorage struct {
-	access       sync.RWMutex
-	delayHistory map[string]*adapter.URLTestHistory
-	updateHooks  []*observable.Subscriber[struct{}]
-}
+// ════════════════ Public API ════════════════
 
-func NewHistoryStorage() *HistoryStorage {
-	return &HistoryStorage{
-		delayHistory: make(map[string]*adapter.URLTestHistory),
-	}
-}
-
-func (s *HistoryStorage) AddUpdateHook(hook *observable.Subscriber[struct{}]) {
-	s.access.Lock()
-	defer s.access.Unlock()
-	s.updateHooks = append(s.updateHooks, hook)
-}
-
-func (s *HistoryStorage) NotifyUpdated() {
-	s.access.RLock()
-	defer s.access.RUnlock()
-	s.notifyUpdated()
-}
-
-func (s *HistoryStorage) LoadURLTestHistory(tag string) *adapter.URLTestHistory {
-	if s == nil {
-		return nil
-	}
-	s.access.RLock()
-	defer s.access.RUnlock()
-	return s.delayHistory[tag]
-}
-
-func (s *HistoryStorage) DeleteURLTestHistory(tag string) {
-	s.access.Lock()
-	delete(s.delayHistory, tag)
-	s.notifyUpdated()
-	s.access.Unlock()
-}
-
-func (s *HistoryStorage) StoreURLTestHistory(tag string, history *adapter.URLTestHistory) {
-	s.access.Lock()
-	s.delayHistory[tag] = history
-	s.notifyUpdated()
-	s.access.Unlock()
-}
-
-func (s *HistoryStorage) notifyUpdated() {
-	for _, updateHook := range s.updateHooks {
-		updateHook.Emit(struct{}{})
-	}
-}
-
-func (s *HistoryStorage) Close() error {
-	s.access.Lock()
-	defer s.access.Unlock()
-	s.updateHooks = nil
-	return nil
-}
-
-func URLTest(ctx context.Context, link string, detour N.Dialer) (uint16, error) {
+func URLTest(ctx context.Context, link string, detour N.Dialer) (t uint16, err error) {
 	return URLTestWithDetailAndStatus(ctx, link, detour, nil, nil)
 }
 
-// URLTestWithStatus probes link and additionally validates the response
-// status code against matcher. A nil matcher keeps the legacy behaviour
-// (any HTTP response counts as success) unless ctx carries one via
-// ContextWithStatusMatcher.
-func URLTestWithStatus(ctx context.Context, link string, detour N.Dialer, matcher *StatusMatcher) (uint16, error) {
+func URLTestWithStatus(ctx context.Context, link string, detour N.Dialer, matcher *StatusMatcher) (t uint16, err error) {
 	return URLTestWithDetailAndStatus(ctx, link, detour, nil, matcher)
 }
 
-// URLTestWithDetail is URLTest but additionally fills per-phase timings
-// and kernel counters into detail for callers that feed ML features.
-func URLTestWithDetail(ctx context.Context, link string, detour N.Dialer, detail *URLTestDetail) (uint16, error) {
+func URLTestWithDetail(ctx context.Context, link string, detour N.Dialer, detail *URLTestDetail) (t uint16, err error) {
 	return URLTestWithDetailAndStatus(ctx, link, detour, detail, nil)
 }
 
-// URLTestWithDetailAndStatus is the full probe entry: detail and matcher
-// may both be nil.
+// URLTestWithDetailAndStatus is the canonical probe entry point.
+//
+// Multiplexed outbounds get a warm-up probe first so the measured probe
+// reuses the established session instead of timing the session handshake.
 func URLTestWithDetailAndStatus(ctx context.Context, link string, detour N.Dialer, detail *URLTestDetail, matcher *StatusMatcher) (uint16, error) {
 	multiplexOutbound, isMultiplexOutbound := common.Cast[adapter.OutboundWithMultiplex](detour)
 	if isMultiplexOutbound && multiplexOutbound.MultiplexEnabled() {
@@ -167,15 +269,19 @@ func URLTestWithDetailAndStatus(ctx context.Context, link string, detour N.Diale
 		warmContext = anytls.ContextWithKeepSession(warmContext)
 		warmContext = contextWithQUICKeepSession(warmContext)
 		warmContext = snell.ContextWithKeepSession(warmContext)
-		_, err := urlTest(warmContext, link, detour, nil, matcher)
+		_, err := urlTestWithDetailAndStatus(warmContext, link, detour, nil, matcher)
 		if err != nil {
 			return 0, err
 		}
 	}
-	return urlTest(ctx, link, detour, detail, matcher)
+	return urlTestWithDetailAndStatus(ctx, link, detour, detail, matcher)
 }
 
-func urlTest(ctx context.Context, link string, detour N.Dialer, detail *URLTestDetail, matcher *StatusMatcher) (t uint16, err error) {
+// urlTestWithDetailAndStatus dials the proxy once and hands the conn to
+// net/http.Transport for HTTP/1.1 request/response. This works across all
+// protocols (TCP, QUIC streams, WireGuard/gVisor netstack, Tailscale,
+// Shadowsocks+plugins) because they all return net.Conn-compatible objects.
+func urlTestWithDetailAndStatus(ctx context.Context, link string, detour N.Dialer, detail *URLTestDetail, matcher *StatusMatcher) (t uint16, err error) {
 	if matcher == nil {
 		matcher = StatusMatcherFromContext(ctx)
 	}
@@ -194,94 +300,216 @@ func urlTest(ctx context.Context, link string, detour N.Dialer, detail *URLTestD
 			port = "80"
 		case "https":
 			port = "443"
+		default:
+			return 0, E.New("unsupported scheme: ", linkURL.Scheme)
 		}
 	}
 
-	start := time.Now()
-	instance, err := detour.DialContext(ctx, "tcp", M.ParseSocksaddrHostPortStr(hostname, port))
-	if err != nil {
-		return
+	// ── Phase 1: dial through proxy ──
+	dialStart := time.Now()
+	instance, dialErr := detour.DialContext(ctx, "tcp", M.ParseSocksaddrHostPortStr(hostname, port))
+	if dialErr != nil {
+		return 0, dialErr
 	}
+	// Ensure conn is always closed. Transport.CloseIdleConnections releases
+	// the Transport's reference first (defer is LIFO), then we close the
+	// underlying conn.
 	defer instance.Close()
 	if detail != nil {
-		detail.TCPConnectMS = time.Since(start).Milliseconds()
+		detail.TCPConnectMS = time.Since(dialStart).Milliseconds()
 	}
-	if N.NeedHandshakeForWrite(instance) {
-		start = time.Now()
-	}
-	var (
-		tlsStart    time.Time
-		tlsDone     time.Time
-		firstByteAt time.Time
-	)
-	if detail != nil {
-		trace := &httptrace.ClientTrace{
-			TLSHandshakeStart: func() { tlsStart = time.Now() },
-			TLSHandshakeDone: func(_ tls.ConnectionState, _ error) { tlsDone = time.Now() },
-			GotFirstResponseByte: func() { firstByteAt = time.Now() },
-		}
-		ctx = httptrace.WithClientTrace(ctx, trace)
-	}
-	req, err := http.NewRequest(http.MethodHead, link, nil)
-	if err != nil {
-		return
-	}
-	client := http.Client{
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				return instance, nil
-			},
-			TLSClientConfig: &tls.Config{
-				Time:    ntp.TimeFuncFromContext(ctx),
-				RootCAs: adapter.RootPoolFromContext(ctx),
-			},
+
+	// ── Phase 2: build single-shot http.Transport over the proxy conn ──
+	var dialed atomic.Bool
+	transport := &http.Transport{
+		DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+			if !dialed.CompareAndSwap(false, true) {
+				return nil, errors.New("urltest: conn already consumed; no redial")
+			}
+			return instance, nil
 		},
+		MaxIdleConnsPerHost:   1,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   C.TCPTimeout,
+		ExpectContinueTimeout: 1 * time.Second,
+		ForceAttemptHTTP2:     false,
+		TLSClientConfig: &tls.Config{
+			ServerName:         hostname,
+			Time:               ntp.TimeFuncFromContext(ctx),
+			RootCAs:            adapter.RootPoolFromContext(ctx),
+			ClientSessionCache: sessionCacheFor(hostname),
+			NextProtos:         []string{"http/1.1"},
+		},
+	}
+	client := &http.Client{
+		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
-		Timeout: C.TCPTimeout,
 	}
 	defer client.CloseIdleConnections()
-	reqStart := time.Now()
-	resp, err := client.Do(req.WithContext(ctx))
+
+	baseReq, err := http.NewRequest(http.MethodHead, link, nil)
 	if err != nil {
-		return
+		return 0, err
 	}
-	resp.Body.Close()
-	elapsed := time.Since(start)
+
+	// ── Phase 3: first request (cold conn) ──
+	probe1 := newProbeTrace()
+	resp, err := client.Do(baseReq.WithContext(httptrace.WithClientTrace(ctx, probe1.hooks())))
+	if err != nil {
+		return 0, err
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+	if statusErr := validateStatus(resp.StatusCode, linkURL, matcher); statusErr != nil {
+		return 0, statusErr
+	}
+
+	start := dialStart
+	firstByteMS := probe1.firstByteMS()
+
+	// ── Phase 4 (optional): warm-conn second request for unified_delay ──
 	if UnifiedDelayFromContext(ctx) {
+		probe2 := newProbeTrace()
 		second := time.Now()
-		var ignoredErr error
-		var secondResp *http.Response
-		secondResp, ignoredErr = client.Do(req.WithContext(ctx))
+		secondResp, ignoredErr := client.Do(baseReq.WithContext(httptrace.WithClientTrace(ctx, probe2.hooks())))
 		if ignoredErr == nil {
-			resp = secondResp
-			resp.Body.Close()
-			elapsed = time.Since(second)
+			_, _ = io.Copy(io.Discard, secondResp.Body)
+			_ = secondResp.Body.Close()
+			if validateStatus(secondResp.StatusCode, linkURL, matcher) == nil {
+				start = second
+				firstByteMS = probe2.firstByteMS()
+			}
 		}
 	}
+
+	totalDelay := time.Since(start)
+	t = uint16(totalDelay.Milliseconds())
+	if t == 0 && totalDelay > 0 {
+		t = 1
+	}
+
 	if detail != nil {
-		if !tlsStart.IsZero() && !tlsDone.IsZero() {
-			detail.TLSHandshakeMS = tlsDone.Sub(tlsStart).Milliseconds()
-		}
-		if !firstByteAt.IsZero() {
-			detail.FirstByteMS = firstByteAt.Sub(reqStart).Milliseconds()
-		}
-		if resp.TLS != nil {
-			detail.DidResume = resp.TLS.DidResume
-		}
-		// Kernel TCP counters before the deferred Close invalidates the fd.
-		// tcpinfo.Read returns ok=false for proxy wrappers that hide the
-		// underlying fd (most of them) and on non-Linux.
+		detail.TLSHandshakeMS = probe1.tlsMS()
+		detail.DidResume = probe1.didResume()
+		detail.FirstByteMS = firstByteMS
 		if tinfo, ok := tcpinfo.Read(instance); ok {
 			detail.TCPRetransmissions = tinfo.Retransmissions
 			detail.TCPLosses = tinfo.Losses
 			detail.PathMTU = tinfo.PathMTU
 		}
 	}
-	if matcher != nil && !matcher.Match(resp.StatusCode) {
-		return 0, fmt.Errorf("urltest: unexpected HTTP status %d", resp.StatusCode)
-	}
-	t = uint16(elapsed / time.Millisecond)
+
 	return
+}
+
+// ════════════════ Status validation ════════════════
+
+func validateStatus(code int, linkURL *url.URL, matcher *StatusMatcher) error {
+	if matcher != nil {
+		if matcher.Match(code) {
+			return nil
+		}
+		return errors.New("urltest: status " + strconv.Itoa(code) +
+			" not in expected-status=" + matcher.String())
+	}
+	if isGenerate204(linkURL) && code != 204 {
+		return errors.New("urltest: captive-portal or hijack detected (expected 204, got " + strconv.Itoa(code) + ")")
+	}
+	if code >= 400 {
+		return &httpStatusError{code: code}
+	}
+	return nil
+}
+
+func isGenerate204(u *url.URL) bool {
+	if u == nil {
+		return false
+	}
+	p := u.Path
+	return p == "/generate_204" || p == "/gen_204" ||
+		strings.HasSuffix(p, "/generate_204") ||
+		strings.HasSuffix(p, "/gen_204")
+}
+
+// ════════════════ httptrace plumbing ════════════════
+
+// probeTrace records per-request phase timestamps via httptrace. The
+// callbacks may fire from different goroutines (httptrace docs), so
+// timestamps are stored as atomic values. After client.Do returns,
+// all callbacks have completed — reads are safe without extra sync.
+type probeTrace struct {
+	tlsStartNS  atomic.Int64
+	tlsDoneNS   atomic.Int64
+	wroteAtNS   atomic.Int64
+	firstByteNS atomic.Int64
+	resume      atomic.Bool
+}
+
+func newProbeTrace() *probeTrace { return &probeTrace{} }
+
+func (p *probeTrace) hooks() *httptrace.ClientTrace {
+	return &httptrace.ClientTrace{
+		TLSHandshakeStart: func() {
+			p.tlsStartNS.Store(time.Now().UnixNano())
+		},
+		TLSHandshakeDone: func(state tls.ConnectionState, err error) {
+			if err != nil {
+				return
+			}
+			p.tlsDoneNS.Store(time.Now().UnixNano())
+			if state.DidResume {
+				p.resume.Store(true)
+			}
+		},
+		WroteRequest: func(info httptrace.WroteRequestInfo) {
+			if info.Err == nil {
+				p.wroteAtNS.Store(time.Now().UnixNano())
+			}
+		},
+		GotFirstResponseByte: func() {
+			p.firstByteNS.Store(time.Now().UnixNano())
+		},
+	}
+}
+
+func (p *probeTrace) tlsMS() int64 {
+	start, done := p.tlsStartNS.Load(), p.tlsDoneNS.Load()
+	if start == 0 || done <= start {
+		return 0
+	}
+	return (done - start) / int64(time.Millisecond)
+}
+
+func (p *probeTrace) firstByteMS() int64 {
+	wrote, first := p.wroteAtNS.Load(), p.firstByteNS.Load()
+	if wrote == 0 || first <= wrote {
+		return 0
+	}
+	return (first - wrote) / int64(time.Millisecond)
+}
+
+func (p *probeTrace) didResume() bool { return p.resume.Load() }
+
+// ════════════════ Error types ════════════════
+
+type httpStatusError struct{ code int }
+
+func (e *httpStatusError) Error() string {
+	return "HTTP " + string([]byte{
+		byte(e.code/100) + '0',
+		byte((e.code/10)%10) + '0',
+		byte(e.code%10) + '0',
+	})
+}
+
+func IsHEADRejected(err error) bool {
+	if err == nil {
+		return false
+	}
+	if hs, ok := err.(*httpStatusError); ok {
+		return hs.code == http.StatusMethodNotAllowed
+	}
+	return false
 }
