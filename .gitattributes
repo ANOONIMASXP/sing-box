@@ -1,0 +1,4 @@
+# LightGBM model fixtures are parsed with exact LF-delimited patterns in
+# tests; keep blob bytes verbatim so Windows checkouts (core.autocrlf=true)
+# don't turn \n into \r\n and silently skip test assertions.
+common/smart/lightgbm/testdata/* -text

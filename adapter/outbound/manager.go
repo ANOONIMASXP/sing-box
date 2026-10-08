@@ -207,20 +207,52 @@ func (m *Manager) AddOutbound(outbound adapter.Outbound) error {
 }
 
 func (m *Manager) add(tag string, outbound adapter.Outbound, generated bool) error {
-	var err error
 	m.access.Lock()
-	defer m.access.Unlock()
-	_, loaded := m.outboundByTag[tag]
-	if loaded {
+	replaced := m.outboundByTag[tag]
+	lifecycle := m.lifecycle
+	// Before the manager starts, any duplicate is an error. Afterwards only
+	// generated outbounds (smart-loadbalance region views) replace the old
+	// member with the same tag; static Create never does.
+	if replaced != nil && (lifecycle == nil || !generated) {
+		m.access.Unlock()
 		return E.New("duplicate outbound tag: ", tag)
+	}
+	if replaced != nil {
+		m.outbounds = common.Filter(m.outbounds, func(it adapter.Outbound) bool {
+			return it != replaced
+		})
 	}
 	m.outbounds = append(m.outbounds, outbound)
 	m.outboundByTag[tag] = outbound
-	if scope != nil {
-		m.runtime[outbound] = struct{}{}
-	}
 	if tag == m.defaultTag || (!generated && m.defaultTag == "" && m.defaultOutbound == nil) || (replaced != nil && m.defaultOutbound == replaced) {
 		m.defaultOutbound = outbound
+	}
+	stage := m.stage
+	m.access.Unlock()
+
+	// Static registrations made before the manager started are picked up by
+	// the normal start flow; generated ones registered while running must be
+	// started immediately (and the replaced member closed afterwards).
+	if lifecycle == nil || !generated {
+		return nil
+	}
+	if lc, isLifecycle := outbound.(adapter.Lifecycle); isLifecycle {
+		for _, st := range adapter.ListStartStages {
+			if st > stage {
+				break
+			}
+			name := "outbound/" + outbound.Type() + "[" + tag + "]"
+			if err := lifecycle.Start(name, lc, st); err != nil {
+				return E.Errors(err, lifecycle.Remove(lc))
+			}
+		}
+	}
+	if replaced != nil {
+		if lc, isLifecycle := replaced.(adapter.Lifecycle); isLifecycle {
+			if err := lifecycle.Remove(lc); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

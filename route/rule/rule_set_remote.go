@@ -129,6 +129,8 @@ func (s *RemoteRuleSet) StartContext(ctx context.Context, startContext *adapter.
 	if !loadedFromCache && !loadedFromInitialPath {
 		if err := s.fetch(ctx, true); err != nil {
 			s.logger.Warn(E.Cause(err, "initial rule-set [", s.tag, "], will retry in background"))
+		}
+	}
 	return nil
 }
 

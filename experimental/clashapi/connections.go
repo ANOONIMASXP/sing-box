@@ -205,16 +205,14 @@ func smartBlockConnection(ctx context.Context, trafficManager *trafficcontrol.Ma
 			render.JSON(w, r, ErrBadRequest)
 			return
 		}
-		snapshot := trafficManager.Snapshot()
-		var target *trafficcontrol.TrackerMetadata
-		for _, c := range snapshot.Connections {
-			meta := c.Metadata()
-			if meta != nil && meta.ID == id {
-				target = meta
-				c.Close()
-				break
-			}
+		conn := trafficManager.Connection(id)
+		if conn == nil {
+			render.Status(r, http.StatusNotFound)
+			render.JSON(w, r, ErrNotFound)
+			return
 		}
+		target := conn.Metadata()
+		conn.Close()
 		if target == nil {
 			render.Status(r, http.StatusNotFound)
 			render.JSON(w, r, ErrNotFound)

@@ -219,6 +219,14 @@ type OutboundGroup interface {
 	All() []string
 	Selected(network string) Outbound
 	AttachConnection(closer io.Closer) (detach func())
+}
+
+// OutboundGroupHint is the dashboard-hint view of a group (Hidden / Icon).
+// Built-in groups carry these; the named interface keeps the hints optional so
+// group implementations that don't care about dashboards (and test doubles)
+// are not forced to grow the methods, and front-ends type-assert hint support.
+type OutboundGroupHint interface {
+	OutboundGroup
 
 	// Hidden reports the dashboard hint set in option.GroupCommonOption.
 	// Returning true tells Clash-style front-ends to keep this group out
@@ -240,6 +248,15 @@ type OutboundGroup interface {
 type ConnectionOutboundGroup interface {
 	OutboundGroup
 	SelectConnection(metadata *InboundContext) Outbound
+}
+
+// DialingOutboundGroup is a group whose own DialContext / ListenPacket must
+// stay in the connection path. The router stops chain resolution at such a
+// group instead of dialing its Selected member directly, so the group keeps
+// observing every dial (Smart learning and breakers, URLTest failover).
+type DialingOutboundGroup interface {
+	OutboundGroup
+	DialThroughGroup()
 }
 
 // ConnectionFailureListener is notified when dialing a resolved outbound chain fails.

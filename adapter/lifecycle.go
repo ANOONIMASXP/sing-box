@@ -143,6 +143,23 @@ func (s *Scope) Close() error {
 	return err
 }
 
+// CloseChild closes the child scope of a component that is replaced or
+// removed at runtime (outbound provider members). The component's cleanup
+// registered by Start stays in place; Scope.Close is idempotent, so the
+// eventual teardown of the parent is still safe.
+func (s *Scope) CloseChild(component Lifecycle) error {
+	s.access.Lock()
+	child, loaded := s.children[component]
+	if loaded {
+		delete(s.children, component)
+	}
+	s.access.Unlock()
+	if !loaded {
+		return nil
+	}
+	return child.Close()
+}
+
 func LogElapsed(logger log.ContextLogger, description ...any) func() {
 	prefix := F.ToString(description...)
 	startTime := time.Now()

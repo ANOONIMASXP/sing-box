@@ -288,10 +288,10 @@ func (s *URLTest) Now() string {
 	return ""
 }
 
-// Selected reports the user's manually-pinned outbound tag, or "" when the
-// group is running on automatic selection. Mirrors Smart.Selected semantics so
+// PinnedTag reports the user's manually-pinned outbound tag, or "" when the
+// group is running on automatic selection. Mirrors Smart.PinnedTag semantics so
 // dashboards can render the pinned / fixed state uniformly across group types.
-func (s *URLTest) Selected() string {
+func (s *URLTest) PinnedTag() string {
 	if pin := s.group.manualPin.Load(); pin != nil {
 		return pin.tag
 	}
@@ -377,6 +377,10 @@ func (s *URLTest) AttachConnection(closer io.Closer) func() {
 	return s.group.interruptGroup.Add(closer, true)
 }
 
+// DialThroughGroup keeps URLTest in the dial path so DialContext / ListenPacket
+// can fail over to the next ranked member and track dial failures.
+func (s *URLTest) DialThroughGroup() {}
+
 func (s *URLTest) References() []string {
 	group := s.group
 	if group == nil {
@@ -453,6 +457,7 @@ func (s *URLTest) InterfaceUpdated(ctx context.Context) {
 		}
 		group.CheckOutbounds(ctx, true)
 	}()
+}
 
 func (s *URLTest) isGroupActive() bool {
 	if !s.group.started.Load() {
@@ -487,8 +492,6 @@ func (s *URLTest) DialContext(ctx context.Context, network string, destination M
 	}
 	conn, err := outbound.DialContext(ctx, network, destination)
 	if err == nil {
-	conn, err := outbound.DialContext(ctx, network, destination)
-	if err == nil {
 		adapter.RecordGroupDial(ctx, s.Tag(), outbound)
 		return s.group.interruptGroup.NewConn(conn, interrupt.IsExternalConnectionFromContext(ctx), interrupt.IsResourceDownloadFromContext(ctx)), nil
 	}
@@ -511,8 +514,6 @@ func (s *URLTest) ListenPacket(ctx context.Context, destination M.Socksaddr) (ne
 	if outbound == nil {
 		return nil, E.New("missing supported outbound")
 	}
-	conn, err := outbound.ListenPacket(ctx, destination)
-	if err == nil {
 	conn, err := outbound.ListenPacket(ctx, destination)
 	if err == nil {
 		adapter.RecordGroupDial(ctx, s.Tag(), outbound)
@@ -548,9 +549,9 @@ func (s *URLTest) onProviderUpdated(tag string) error {
 			s.group.ticker.Reset(s.group.interval)
 		}
 		s.group.access.Unlock()
-	s.providerUpdateCheck.Schedule(func() {
+		s.providerUpdateCheck.Schedule(func() {
 			_, _ = s.group.urlTestWait(s.ctx, false)
-	s})
+		})
 	}
 	return nil
 }

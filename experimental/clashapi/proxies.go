@@ -90,7 +90,7 @@ func clearProxySelection(w http.ResponseWriter, r *http.Request) {
 		// also auto-clears on the next user-triggered speed test, so
 		// DELETE just mirrors that lifecycle for UIs that bind the
 		// "release fixed" button to the REST verb.
-		previous := p.Selected()
+		previous := p.PinnedTag()
 		p.SelectOutbound("")
 		render.JSON(w, r, render.M{
 			"group":        p.Tag(),
@@ -249,8 +249,13 @@ func proxyInfo(server *Server, detour adapter.Outbound) *badjson.JSONObject {
 		// mihomo-compatible dashboard hints. Always emitted (no
 		// omitempty) so front-ends can rely on the field's presence —
 		// `hidden=false`, `icon=""` are the documented "absent" sentinels.
-		info.Put("hidden", groupOutbound.Hidden())
-		info.Put("icon", groupOutbound.Icon())
+		if hint, ok := detour.(adapter.OutboundGroupHint); ok {
+			info.Put("hidden", hint.Hidden())
+			info.Put("icon", hint.Icon())
+		} else {
+			info.Put("hidden", false)
+			info.Put("icon", "")
+		}
 
 		// URLTest's temporary manual pin surfaces like Smart's `fixed`
 		// so metacubexd / zashboard can render a uniform "pinned" chip
@@ -258,7 +263,7 @@ func proxyInfo(server *Server, detour adapter.Outbound) *badjson.JSONObject {
 		// URLTest doesn't have a separate "pin suspended" state — if
 		// the pin is still in the snapshot it remains in effect.
 		if ut, ok := detour.(*group.URLTest); ok {
-			selected := ut.Selected()
+			selected := ut.PinnedTag()
 			info.Put("fixed", selected)
 			info.Put("fixedSuspended", false)
 			info.Put("fixedActive", selected)
@@ -295,7 +300,7 @@ func proxyInfo(server *Server, detour adapter.Outbound) *badjson.JSONObject {
 			suspended := sg.PinSuspended()
 			info.Put("fixedSuspended", suspended)
 			if suspended {
-				info.Put("fixedActive", groupOutbound.Now())
+				info.Put("fixedActive", sg.Now())
 			} else {
 				info.Put("fixedActive", sg.FixedSelection())
 			}

@@ -198,6 +198,7 @@ func (s *ProviderRemote) StartContext(ctx context.Context, startContext *adapter
 		if err := s.fetch(ctx, true); err != nil {
 			s.logger.Warn(E.Cause(err, "initial outbound provider [", s.Tag(), "], will retry in background"))
 		}
+	}
 	if err := s.Adapter.Start(); err != nil {
 		return err
 	}

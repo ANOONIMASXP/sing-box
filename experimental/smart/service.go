@@ -69,7 +69,7 @@ func (s *Service) Dependencies() []string { return nil }
 // Start brings up the service. Heavy resources (model load, downloader,
 // collector file) are deferred to first opt-in by a Smart group — this
 // avoids spinning up a downloader if no group actually uses ML.
-func (s *Service) Start(stage adapter.StartStage) error {
+func (s *Service) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	if stage == adapter.StartStateStart {
 		s.started = true
 	}
@@ -85,6 +85,11 @@ func (s *Service) Close() error {
 		_ = s.collector.Close()
 	}
 	return nil
+}
+
+// close is the test-facing alias used by service_test's defer cleanup.
+func (s *Service) close() error {
+	return s.Close()
 }
 
 // LightGBMEnabled reports whether ML infrastructure is configured.

@@ -412,7 +412,7 @@ type Smart struct {
 	include          *regexp.Regexp
 	useAllProviders  bool
 
-	history adapter.URLTestHistoryStorage
+	history *urltest.HistoryStorage
 
 	// groupOrdinal is this group's process-unique sequence number assigned
 	// at construction time. Used to stagger background task firings across
@@ -777,9 +777,9 @@ func (s *Smart) PostStart() error {
 		s.SetAlgorithm(s.configAlgorithm)
 	}
 
-	// Get history storage from Clash server (for alive-checking)
-	if clashServer := service.FromContext[adapter.ClashServer](s.ctx); clashServer != nil {
-		s.history = clashServer.HistoryStorage()
+	// Get history storage (registered by box; used for alive-checking)
+	if history := service.PtrFromContext[urltest.HistoryStorage](s.ctx); history != nil {
+		s.history = history
 	}
 
 	// Get cache file and init store
@@ -1321,9 +1321,38 @@ func (s *Smart) SelectOutbound(tag string) bool {
 	return false
 }
 
-// Selected returns the pinned node tag, or "" when Smart is in automatic mode.
+// PinnedTag returns the pinned node tag, or "" when Smart is in automatic mode.
 // Surfaced in Clash API output as the `fixed` field.
-func (s *Smart) Selected() string { return s.getManualSelected() }
+func (s *Smart) PinnedTag() string { return s.getManualSelected() }
+
+// Selected implements adapter.OutboundGroup: resolve the tag Smart currently
+// reports through the outbound manager so dashboards and route code can treat
+// Smart like any other group.
+func (s *Smart) Selected(string) adapter.Outbound {
+	tag := s.Now()
+	if tag == "" {
+		return nil
+	}
+	ob, ok := s.outboundMgr.Outbound(tag)
+	if !ok {
+		return nil
+	}
+	return ob
+}
+
+// DialThroughGroup keeps Smart in the dial path: every connection must go
+// through DialContext / ListenPacket so selection, learning and breakers see
+// it, instead of the router dialing Selected() directly.
+func (s *Smart) DialThroughGroup() {}
+
+// AttachConnection defers to the interrupt group so interrupting the group
+// also detaches the caller's bookkeeping for this connection.
+func (s *Smart) AttachConnection(closer io.Closer) func() {
+	if s.interruptGroup == nil {
+		return func() {}
+	}
+	return s.interruptGroup.Add(closer, true)
+}
 
 // ConfigName returns the Smart store's config namespace ("singbox" in this
 // fork — mihomo used the config filename). Exposed for ClashAPI routes that
@@ -1467,7 +1496,7 @@ func (s *Smart) DiagnosticSnapshot() map[string]any {
 		"policy_priority": s.PolicyPriorityRules(),
 		"members":         len(s.All()),
 		"now":             s.Now(),
-		"fixed":           s.Selected(),
+		"fixed":           s.PinnedTag(),
 		"test_url":        s.TestURL(),
 	}
 

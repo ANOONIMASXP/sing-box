@@ -5,21 +5,28 @@ go 1.25.5
 require (
 	filippo.io/age v1.3.1
 	github.com/CHIZI-0618/sing-ebpf v0.1.0-alpha.11.0.20261005160001-a0edc8509e31
+	github.com/MiChongs/sing-ebpf v0.1.0-alpha.18
+	github.com/RussellLuo/timingwheel v0.0.0-20220218152713-54845bda3108
+	github.com/VividCortex/ewma v1.2.0
 	github.com/anthropics/anthropic-sdk-go v1.26.0
+	github.com/benbjohnson/clock v1.3.5
 	github.com/caddyserver/certmagic v0.25.3-0.20260421143802-60d9d8b415d6
 	github.com/caddyserver/zerossl v0.1.5
+	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/coder/websocket v1.8.14
 	github.com/creack/pty v1.1.24
 	github.com/cretz/bine v0.2.0
 	github.com/database64128/tfo-go/v2 v2.3.3
 	github.com/dblohm7/wingoes v0.0.0-20240119213807-a09d6be7affa
-	github.com/dmitryikh/leaves v0.0.0-20230708180554-25d19a787328
+	github.com/dgraph-io/ristretto/v2 v2.4.2
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/go-chi/render v1.0.3
+	github.com/goccy/go-json v0.10.6
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/gofrs/uuid/v5 v5.5.1
 	github.com/golang/protobuf v1.5.4
 	github.com/insomniacslk/dhcp v0.0.0-20260220084031-5adc3eb26f91
+	github.com/josharian/intern v1.0.0
 	github.com/jsimonetti/rtnetlink v1.4.1
 	github.com/keybase/go-keychain v0.0.1
 	github.com/libdns/acmedns v0.5.0
@@ -38,6 +45,7 @@ require (
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/pires/go-proxyproto v0.8.1
 	github.com/pkg/sftp v1.13.10
+	github.com/puzpuzpuz/xsync/v3 v3.5.1
 	github.com/sagernet/asc-go v0.0.0-20260914163356-9e3d45a797c1
 	github.com/sagernet/bbolt v0.0.0-20260915102804-500ee1e84832
 	github.com/sagernet/cors v1.2.1
@@ -72,6 +80,7 @@ require (
 	github.com/tailscale/go-winio v0.0.0-20231025203758-c4f33415bf55
 	github.com/vernesong/leaves v0.0.0-20260629081247-2a1c022f37d0
 	github.com/vishvananda/netns v0.0.5
+	github.com/vmihailenco/msgpack/v5 v5.4.1
 	go.uber.org/zap v1.27.1
 	go4.org/mem v0.0.0-20240501181205-ae6ca9944745
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
@@ -120,6 +129,7 @@ require (
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1 // indirect
 	github.com/dgryski/go-camellia v0.0.0-20191119043421-69a8a13fb23d // indirect
 	github.com/dgryski/go-metro v0.0.0-20180109044635-280f6062b5bc // indirect
+	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ebitengine/purego v0.10.0 // indirect
 	github.com/florianl/go-nfqueue/v2 v2.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
@@ -130,7 +140,6 @@ require (
 	github.com/go4org/hashtriemap v0.0.0-20251130024219-545ba229f689 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
-	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/certificate-transparency-go v1.3.2 // indirect
@@ -139,7 +148,6 @@ require (
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/nftables v0.2.1-0.20240414091927-5e242ec57806 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
 	github.com/hdevalence/ed25519consensus v0.2.0 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
@@ -153,15 +161,11 @@ require (
 	github.com/libp2p/go-netroute v0.2.1 // indirect
 	github.com/mdlayher/socket v0.6.0 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect
-	github.com/panjf2000/ants/v2 v2.12.0 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.26 // indirect
 	github.com/pion/dtls/v3 v3.1.5 // indirect
 	github.com/pion/logging v0.2.4 // indirect
 	github.com/pion/transport/v4 v4.0.2 // indirect
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/prometheus-community/pro-bing v0.4.0 // indirect
-	github.com/puzpuzpuz/xsync/v3 v3.5.1 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/safchain/ethtool v0.3.0 // indirect
 	github.com/sagernet/cronet-go/lib/android_386 v0.0.0-20260929213014-a1cafd93eb1f // indirect
@@ -207,6 +211,7 @@ require (
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/tjfoc/gmsm v1.4.1 // indirect
 	github.com/u-root/uio v0.0.0-20240224005618-d2acac8f3701 // indirect
+	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	github.com/zeebo/blake3 v0.2.4 // indirect

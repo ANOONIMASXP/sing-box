@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 
@@ -15,6 +16,12 @@ import (
 // dropped without touching the file, and collection resumes after the
 // periodic flush notices the file was removed.
 func TestCollectorSizeLimitLatch(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// The collector keeps the CSV handle open between flushes and this
+		// test simulates an external deleter. Windows refuses to unlink an
+		// open file, so the scenario cannot be reproduced here.
+		t.Skip("deleting an open file is not supported on Windows")
+	}
 	path := filepath.Join(t.TempDir(), "samples.csv")
 	c, err := NewDataCollector(path, 1, nil)
 	if err != nil {
