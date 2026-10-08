@@ -713,7 +713,29 @@ func newSmart(ctx context.Context, router adapter.Router, logger log.ContextLogg
 // parsePolicyPriority moved to smart_priority.go (richer prefix grammar
 // + multiplicative aggregation + per-tag factor cache).
 
-func (s *Smart) Start() error {
+// Compile-time guard: the outbound manager discovers lifecycle components
+// with a runtime assertion, so a regression to a legacy Start() signature
+// would silently skip Smart instead of failing the build.
+var _ adapter.Lifecycle = (*Smart)(nil)
+
+// Start adapts Smart to the staged lifecycle used by this branch's outbound
+// manager: the member snapshot is built at the start stage, and PostStart
+// (store / history / LightGBM / hydration / background tasks) runs once at
+// the finish-start stage, mirroring URLTest and LoadBalance. Without this
+// the manager's outbound.(adapter.Lifecycle) assertion fails silently and
+// Smart would never start at all.
+func (s *Smart) Start(stage adapter.StartStage, scope *adapter.Scope) error {
+	switch stage {
+	case adapter.StartStateStart:
+		return s.startGroup()
+	case adapter.StartStateStarted:
+		scope.Add(s.Close)
+		return s.PostStart()
+	}
+	return nil
+}
+
+func (s *Smart) startGroup() error {
 	if s.useAllProviders {
 		for _, provider := range s.provider.Providers() {
 			s.providers[provider.Tag()] = provider
@@ -1818,19 +1840,19 @@ type ClearSelectionResult struct {
 // the group keeps feeling pinned:
 //
 //  1. Clear manualSelected            — obvious, without it SelectOutbound
-//                                       keeps short-circuiting to the pin.
+//     keeps short-circuiting to the pin.
 //  2. Reset lastSelectedTag           — Now() surfaced the old pin as the
-//                                       "current" node until the next dial.
+//     "current" node until the next dial.
 //  3. Drop unwrap cache for this grp  — the unwrap LRU held (target → pin)
-//                                       mappings, so subsequent dials
-//                                       bypassed fresh selection.
+//     mappings, so subsequent dials
+//     bypassed fresh selection.
 //  4. Interrupt active connections    — existing conns routed via the pin
-//                                       would keep flowing through it
-//                                       forever; parity with Selector's
-//                                       SelectOutbound → Interrupt path.
+//     would keep flowing through it
+//     forever; parity with Selector's
+//     SelectOutbound → Interrupt path.
 //  5. Async RunPrefetch + ranking     — kick the ranking pipeline so the
-//                                       next dial already sees fresh
-//                                       weights instead of delay-fallback.
+//     next dial already sees fresh
+//     weights instead of delay-fallback.
 //
 // Returns a summary of what changed. Always succeeds (a Smart group always
 // accepts an unpin operation, even if no pin was active).
@@ -2656,8 +2678,9 @@ func (s *Smart) racePacketCandidates(
 //   - "prefetch" : periodically pre-computed best-node list
 //   - "weight"   : realtime computation from the weight store
 //   - "delay"    : URLTest-latency-based ordering (cold-start fallback so we
-//                  still bias toward fast nodes before any stats accumulate)
+//     still bias toward fast nodes before any stats accumulate)
 //   - "fallback" : no signal at all; random pick filtered by alive/blocked
+//
 // selectProxiesTraced's bypassManualPin parameter asks the function to
 // skip the manual-pin short-circuit and fall through to the normal
 // tier logic (unwrap / prefetch / weight / delay / fallback). Used by
@@ -3503,8 +3526,8 @@ func (s *Smart) parallelDial(ctx context.Context, network string, dest M.Socksad
 
 // hedgedDial 对 outbounds 执行 "错时竞速 (staggered race)"：
 //
-//   primary (index 0) 立刻起飞，backup (index 1..) 被延后 smartHedgedDelay
-//   再起飞。先完成任何一个节点的 dial 即获胜，其余 ctx 取消。
+//	primary (index 0) 立刻起飞，backup (index 1..) 被延后 smartHedgedDelay
+//	再起飞。先完成任何一个节点的 dial 即获胜，其余 ctx 取消。
 //
 // 与 parallelDial 的区别：并行 race 所有 arm 都立刻发车，会双倍消耗
 // 上行带宽/SYN 表/远端连接数；hedged dial 默认只打一条连接，仅在
@@ -4883,6 +4906,7 @@ func (s *Smart) updatePrefetchCache(meta *smartDialMeta, target, nodeName string
 //
 //   - 1-second freshness cache short-circuits back-to-back identical
 //     probes even across sequential calls.
+//
 // Health-check probe-scheduler tunables. These bound the per-tick probe
 // dispatch so a large subscription stays cool: instead of O(N) TLS probes
 // every interval, we always probe the few nodes that matter (priority) and

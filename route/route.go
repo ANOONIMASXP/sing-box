@@ -208,6 +208,13 @@ func resolveOutbound(outbound adapter.Outbound, network string, metadata *adapte
 		if !isGroup {
 			break
 		}
+		if _, isDialing := group.(adapter.DialingOutboundGroup); isDialing {
+			// Smart / URLTest / smart-region must dial members themselves so
+			// selection, learning, breakers and failover observe every dial;
+			// the chain ends at the group and the dial trace appends the
+			// member it actually picked.
+			break
+		}
 		if connectionGroup, ok := group.(adapter.ConnectionOutboundGroup); ok {
 			selectionMetadata := *metadata
 			selectionMetadata.Network = network
