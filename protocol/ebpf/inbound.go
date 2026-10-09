@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	commonEBPF "github.com/CHIZI-0618/sing-ebpf"
@@ -118,6 +119,10 @@ type Inbound struct {
 	cgroupRecoveryEvents      chan commonEBPF.UDPReleaseEvent
 	lifecycleAccess           sync.Mutex
 	interfaceMonitor          tcInterfaceMonitor
+	// localTCAwaitingInterface is set while local TC interception has not been
+	// attached yet because no default interface was known at start. The
+	// interface monitor attaches it as soon as one is reported.
+	localTCAwaitingInterface atomic.Bool
 
 	bypassRuleSetAccess       sync.Mutex
 	bypassRuleSet             []adapter.RuleSet

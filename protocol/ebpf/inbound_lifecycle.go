@@ -76,8 +76,9 @@ func (i *Inbound) startInbound() error {
 	sharedRewriteEnabled := i.sharedRewriteEnabled()
 	if localTCEnabled {
 		localInterface = defaultInterface
+		i.localTCAwaitingInterface.Store(localInterface == "")
 		if localInterface == "" {
-			i.logger.Warn("default interface unavailable; local TC eBPF interception is paused")
+			i.logger.Info("default interface not detected yet; local TC eBPF interception will start once it is available")
 		}
 	}
 	sharedInterfaces := activeSharedInterfaces(i.sharedOptions.Interface, defaultInterface)

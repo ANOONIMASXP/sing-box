@@ -165,31 +165,32 @@ var eBPFPrivateDestinationPrefixes = []netip.Prefix{
 }
 
 func (i *Inbound) compileActionPolicy() (commonEBPF.CompiledPolicy, error) {
-	if err := i.validateBypassExcludeConflicts(); err != nil {
+	policy, err := i.buildActionPolicy()
+	if err != nil {
 		return commonEBPF.CompiledPolicy{}, err
 	}
+	return commonEBPF.CompileActionPolicy(policy)
+}
+
+func (i *Inbound) buildActionPolicy() (commonEBPF.ActionPolicy, error) {
+	if err := i.validateBypassExcludeConflicts(); err != nil {
+		return commonEBPF.ActionPolicy{}, err
+	}
+	// The local data planes and the process tracker must see the same final
+	// UID actions. Passing include ranges and overlapping exclude ranges as
+	// separate decisions would let the include win and silently drop every
+	// exclude_* option whenever an include_* option is configured.
+	uidDecisions, uidDefault := i.compileProcessUIDPolicy()
 	policy := commonEBPF.ActionPolicy{
 		EnableTCP: i.enableTCP,
 		EnableUDP: i.enableUDP,
 		Local: commonEBPF.ActionScope{
-			Default: commonEBPF.DecisionIntercept,
+			Default: uidDefault,
+			UID:     uidDecisions,
 		},
 		Shared: commonEBPF.ActionScope{
 			Default: commonEBPF.DecisionIntercept,
 		},
-	}
-	if i.localPolicy.IncludeUIDConfigured {
-		policy.Local.Default = commonEBPF.DecisionPass
-		for _, uid := range i.localPolicy.IncludeUID {
-			policy.Local.UID = append(policy.Local.UID, commonEBPF.UIDDecision{
-				Start: uid.Start, End: uid.End, Action: commonEBPF.DecisionIntercept,
-			})
-		}
-	}
-	for _, uid := range i.localPolicy.ExcludeUID {
-		policy.Local.UID = append(policy.Local.UID, commonEBPF.UIDDecision{
-			Start: uid.Start, End: uid.End, Action: commonEBPF.DecisionPass,
-		})
 	}
 	appendDestinationPolicy(&policy.Local, i.localPolicy.BypassPrivateAddress, i.localBypassPort, i.localDNSMode,
 		i.fakeIPIPv4Prefix, i.fakeIPIPv6Prefix, i.localBypassExclude, i.enableTCP, i.enableUDP)
@@ -219,9 +220,9 @@ func (i *Inbound) compileActionPolicy() (commonEBPF.CompiledPolicy, error) {
 	i.localInitialDestinations = destinationPassDecisions(policy.Local.DestinationCIDR)
 	i.sharedInitialDestinations = destinationPassDecisions(policy.Shared.DestinationCIDR)
 	if err := validateActionPolicyScope(policy); err != nil {
-		return commonEBPF.CompiledPolicy{}, err
+		return commonEBPF.ActionPolicy{}, err
 	}
-	return commonEBPF.CompileActionPolicy(policy)
+	return policy, nil
 }
 
 func destinationPassDecisions(decisions []commonEBPF.CIDRDecision) []commonEBPF.CIDRDecision {
