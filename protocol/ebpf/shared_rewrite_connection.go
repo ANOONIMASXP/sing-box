@@ -9,7 +9,7 @@ import (
 	"net/netip"
 	"os"
 
-	ECommon "github.com/CHIZI-0618/sing-ebpf"
+	ECommon "github.com/MiChongs/sing-ebpf"
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common/buf"

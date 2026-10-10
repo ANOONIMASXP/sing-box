@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	commonEBPF "github.com/CHIZI-0618/sing-ebpf"
+	commonEBPF "github.com/MiChongs/sing-ebpf"
 	"github.com/sagernet/sing/common/bufio"
 	N "github.com/sagernet/sing/common/network"
 

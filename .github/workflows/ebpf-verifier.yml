@@ -56,7 +56,7 @@ jobs:
       - name: Test sing-ebpf compatibility and object ABI
         run: |
           set -euo pipefail
-          sing_ebpf_dir="$(go list -m -f '{{.Dir}}' github.com/CHIZI-0618/sing-ebpf)"
+          sing_ebpf_dir="$(go list -m -f '{{.Dir}}' github.com/MiChongs/sing-ebpf)"
           sing_ebpf_sing_version="$(awk '$1 == "github.com/sagernet/sing" { print $2; exit }' "$sing_ebpf_dir/go.mod")"
           selected_sing_version="$(go list -m -f '{{.Version}}' github.com/sagernet/sing)"
           echo "sing-ebpf requires sing $sing_ebpf_sing_version"
@@ -65,7 +65,7 @@ jobs:
             echo "::notice::sing-ebpf has an older sing requirement; tests use sing-box's selected version"
           fi
           go test -tags with_ebpf \
-            github.com/CHIZI-0618/sing-ebpf/... \
+            github.com/MiChongs/sing-ebpf/... \
             ./protocol/ebpf
 
       # sing-ebpf owns verifier, program-run, attachment and packet-path tests.

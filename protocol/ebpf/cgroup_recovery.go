@@ -7,7 +7,7 @@ import (
 	"context"
 	"time"
 
-	commonEBPF "github.com/CHIZI-0618/sing-ebpf"
+	commonEBPF "github.com/MiChongs/sing-ebpf"
 )
 
 const (

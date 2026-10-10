@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	filippo.io/age v1.3.1
-	github.com/CHIZI-0618/sing-ebpf v0.1.0-alpha.11.0.20261005160001-a0edc8509e31
+	github.com/MiChongs/sing-ebpf v0.1.0-alpha.21
 	github.com/RussellLuo/timingwheel v0.0.0-20220218152713-54845bda3108
 	github.com/VividCortex/ewma v1.2.0
 	github.com/anthropics/anthropic-sdk-go v1.26.0

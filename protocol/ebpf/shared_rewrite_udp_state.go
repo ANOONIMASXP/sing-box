@@ -8,7 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	ECommon "github.com/CHIZI-0618/sing-ebpf"
+	ECommon "github.com/MiChongs/sing-ebpf"
 )
 
 type sharedUDPClientTable struct {

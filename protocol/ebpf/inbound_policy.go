@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"strings"
 
-	commonEBPF "github.com/CHIZI-0618/sing-ebpf"
+	commonEBPF "github.com/MiChongs/sing-ebpf"
 	"github.com/sagernet/sing-box/adapter"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/x/list"

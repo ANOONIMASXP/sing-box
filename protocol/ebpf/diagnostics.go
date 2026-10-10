@@ -13,7 +13,7 @@ import (
 
 	"github.com/sagernet/sing-box/adapter"
 
-	commonEBPF "github.com/CHIZI-0618/sing-ebpf"
+	commonEBPF "github.com/MiChongs/sing-ebpf"
 )
 
 // EBPFAttachmentDiagnostics describes one place this inbound is actually

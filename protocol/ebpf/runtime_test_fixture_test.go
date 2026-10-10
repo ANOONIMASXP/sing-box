@@ -5,7 +5,7 @@ package ebpf
 import (
 	"net/netip"
 
-	commonEBPF "github.com/CHIZI-0618/sing-ebpf"
+	commonEBPF "github.com/MiChongs/sing-ebpf"
 )
 
 type testTCRuntime struct {

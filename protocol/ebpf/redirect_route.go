@@ -5,7 +5,7 @@ package ebpf
 import (
 	"net/netip"
 
-	commonEBPF "github.com/CHIZI-0618/sing-ebpf"
+	commonEBPF "github.com/MiChongs/sing-ebpf"
 	E "github.com/sagernet/sing/common/exceptions"
 
 	"golang.org/x/sys/unix"

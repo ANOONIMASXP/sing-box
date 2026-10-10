@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	commonEBPF "github.com/CHIZI-0618/sing-ebpf"
+	commonEBPF "github.com/MiChongs/sing-ebpf"
 )
 
 func TestCompileActionPolicyKeepsDestinationSemanticsInSync(t *testing.T) {

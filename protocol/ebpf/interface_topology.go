@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"slices"
 
-	kernelRuntime "github.com/CHIZI-0618/sing-ebpf/runtime"
+	kernelRuntime "github.com/MiChongs/sing-ebpf/runtime"
 	"github.com/sagernet/sing/common/control"
 )
 
