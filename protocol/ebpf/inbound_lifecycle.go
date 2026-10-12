@@ -367,10 +367,21 @@ func (i *Inbound) processTrackingMode() string {
 		return "off"
 	}
 	if i.processTracker != nil {
-		if i.processTracker.ReleaseCleanup() {
-			return "cgroup_socket_release"
+		mode := "cgroup_socket"
+		// CreateHook only exists in the locally replaced sing-ebpf build.
+		// Assert dynamically so this package still compiles against a
+		// sing-ebpf checkout that predates the socket-create hook (CI
+		// resolves ./sing-ebpf from upstream ref v0.1.0-alpha.21).
+		if createHook, ok := i.processTracker.(interface{ CreateHook() bool }); ok && createHook.CreateHook() {
+			// Owners are recorded at socket creation: the connect/sendmsg
+			// hooks can be held by netd placeholders while this one stays
+			// attachable.
+			mode = "cgroup_sock_create"
 		}
-		return "cgroup_socket_lru"
+		if i.processTracker.ReleaseCleanup() {
+			return mode + "_release"
+		}
+		return mode + "_lru"
 	}
 	return "userspace"
 }
