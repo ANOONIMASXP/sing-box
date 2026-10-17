@@ -239,6 +239,10 @@ type udpReleasePathDiagnostics interface {
 	UDPReleasePathDiagnostics() (bool, string, string)
 }
 
+// The cgroup backend must keep reporting its socket-release path; without
+// this the optional check in Diagnostics would silently leave it empty.
+var _ udpReleasePathDiagnostics = (*commonEBPF.CgroupBackend)(nil)
+
 // tcOutcomeHistory is the small amount of extra bookkeeping Diagnostics
 // needs that nothing else in this package already tracks: the last outcome
 // runTCInterfaceUpdateLoop's update step reported, when a failing component
