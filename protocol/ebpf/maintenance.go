@@ -22,6 +22,9 @@ const (
 	tcAssignmentPressureExitRounds   = 3
 )
 
+// tcAssignmentClockBase gives per-flow assignment caches a monotonic time base.
+var tcAssignmentClockBase = time.Now()
+
 type mapPressureHysteresis struct {
 	enterPercent uint64
 	exitPercent  uint64

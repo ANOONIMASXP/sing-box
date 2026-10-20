@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"os"
 	"syscall"
+	"time"
 
 	commonEBPF "github.com/MiChongs/sing-ebpf"
 	"github.com/sagernet/sing-box/adapter"
@@ -76,6 +77,11 @@ func (i *Inbound) newTCPacket(
 		return false
 	}
 	client := source.AddrPort()
+	flow := tcUDPFlowKey{client: client, destination: destination}
+	now := int64(time.Since(tcAssignmentClockBase))
+	if key, loaded := i.udpClientTable.cachedTCFlow(flow, now); loaded {
+		return i.deliverTCPacket(key, buffer, source, destination, takeOwnership)
+	}
 	// The receiving ifindex belongs to the isolated namespace, not the
 	// original host interface. Original interface metadata is in the value.
 	assignmentKeyInterfaceIndex := uint32(0)
@@ -109,6 +115,17 @@ func (i *Inbound) newTCPacket(
 		i.udpWarnings.originalDestination.warn(i.logger, "retain TC eBPF UDP return route: ", err)
 		return false
 	}
+	i.udpClientTable.setTCFlow(flow, key, now)
+	return i.deliverTCPacket(key, buffer, source, destination, takeOwnership)
+}
+
+func (i *Inbound) deliverTCPacket(
+	key udpSessionKey,
+	buffer *buf.Buffer,
+	source M.Socksaddr,
+	destination netip.AddrPort,
+	takeOwnership bool,
+) bool {
 	if takeOwnership {
 		i.udpNat.NewPacketBuffer(key, buffer, source, M.SocksaddrFromNetIP(destination), nil)
 		return true
