@@ -105,6 +105,7 @@ type _HTTPOutboundOptions struct {
 	Network                NetworkList          `json:"network,omitempty"`
 	Version                int                  `json:"version,omitempty" enum:"0,1,2,3"`
 	DisableVersionFallback bool                 `json:"disable_version_fallback,omitempty"`
+	UDPFastOpen            bool                 `json:"udp_fast_open,omitzero"`
 	HTTP2Options           HTTP2Options         `json:"-"`
 	HTTP3Options           QUICOptions          `json:"-"`
 }
