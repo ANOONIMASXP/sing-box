@@ -40,12 +40,12 @@ jobs:
 
       # go.mod replaces github.com/MiChongs/sing-ebpf with the local
       # ./sing-ebpf directory, so every go command needs that checkout.
-      # The ref matches the local clone's baseline (v0.1.0-alpha.21).
+      # The ref matches the local clone's baseline (v0.1.0-alpha.26).
       - name: Checkout sing-ebpf
         uses: actions/checkout@v6
         with:
           repository: MiChongs/sing-ebpf
-          ref: v0.1.0-alpha.21
+          ref: v0.1.0-alpha.26
           path: sing-ebpf
 
       - name: Setup Go

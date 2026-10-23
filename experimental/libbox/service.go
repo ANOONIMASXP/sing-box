@@ -364,6 +364,11 @@ func (w *platformInterfaceWrapper) UsePlatformAutoRedirect() bool {
 	return w.iif.UsePlatformAutoRedirect()
 }
 
+func (w *platformInterfaceWrapper) CreateAutoRedirectListener(inet6 bool) (int, error) {
+	fd, err := w.iif.CreateAutoRedirectListener(inet6)
+	return int(fd), err
+}
+
 func (w *platformInterfaceWrapper) CreateAutoRedirect(options adapter.AutoRedirectOptions) (adapter.AutoRedirectSession, error) {
 	encodedOptions, err := encodeAutoRedirectOptions(options)
 	if err != nil {

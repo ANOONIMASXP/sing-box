@@ -60,6 +60,9 @@ type ServerEndpoint struct {
 }
 
 func NewServerEndpoint(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.MASQUEServerEndpointOptions) (adapter.Endpoint, error) {
+	if err := options.TCPCongestionControl.Validate(); err != nil {
+		return nil, err
+	}
 	if err := options.H3CongestionControl.Validate(options.Versions(), true); err != nil {
 		return nil, err
 	}
@@ -246,6 +249,10 @@ func (s *ServerEndpoint) PortAddresses() (netip.Addr, netip.Addr) {
 
 func (s *ServerEndpoint) PortMTU() uint32 {
 	return s.device.PortMTU()
+}
+
+func (s *ServerEndpoint) UpstreamPort() any {
+	return s.device
 }
 
 func (s *ServerEndpoint) AttachReturn(returnPath tun.Return) error {

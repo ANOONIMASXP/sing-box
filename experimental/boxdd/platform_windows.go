@@ -245,6 +245,10 @@ func (p *windowsPlatformInterface) UsePlatformAutoRedirect() bool {
 	return false
 }
 
+func (p *windowsPlatformInterface) CreateAutoRedirectListener(inet6 bool) (int, error) {
+	return -1, os.ErrInvalid
+}
+
 func (p *windowsPlatformInterface) CreateAutoRedirect(options adapter.AutoRedirectOptions) (adapter.AutoRedirectSession, error) {
 	return nil, os.ErrInvalid
 }

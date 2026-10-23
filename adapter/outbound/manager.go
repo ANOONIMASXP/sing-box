@@ -12,11 +12,8 @@ import (
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
-var (
-	_ adapter.OutboundManager         = (*Manager)(nil)
-	_ adapter.RuntimeComponentRemover = (*Manager)(nil)
-	_ adapter.OutboundAdder           = (*Manager)(nil)
-)
+var _ adapter.OutboundManager = (*Manager)(nil)
+var _ adapter.OutboundAdder = (*Manager)(nil)
 
 type Manager struct {
 	mutation  sync.Mutex
@@ -188,17 +185,24 @@ func (m *Manager) Create(ctx context.Context, router adapter.Router, logger log.
 	if err != nil {
 		return err
 	}
-	return m.add(tag, outbound, false)
+	m.access.Lock()
+	defer m.access.Unlock()
+	_, loaded := m.outboundByTag[tag]
+	if loaded {
+		return E.New("duplicate outbound tag: ", tag)
+	}
+	m.outbounds = append(m.outbounds, outbound)
+	m.outboundByTag[tag] = outbound
+	if tag == m.defaultTag || (m.defaultTag == "" && m.defaultOutbound == nil) {
+		m.defaultOutbound = outbound
+	}
+	return nil
 }
 
 // AddOutbound registers an outbound its owner constructed itself (the region
-// views of a smart-loadbalance group). Going through Create from inside a
-// constructor would re-enter the registry, which holds its lock while a
-// constructor runs. Before the manager starts, a duplicate tag is an error;
-// afterwards the outbound is started as a runtime outbound and replaces any
-// outbound with the same tag. A generated outbound only becomes the default
-// outbound when route.final names it: owners register it before themselves,
-// so it must not take the "first outbound" default from its owner.
+// outbounds smart-loadbalance generates for each region). A generated outbound
+// only becomes the default when no default is set yet; it never displaces a
+// statically configured default.
 func (m *Manager) AddOutbound(outbound adapter.Outbound) error {
 	if outbound == nil || outbound.Tag() == "" {
 		return os.ErrInvalid

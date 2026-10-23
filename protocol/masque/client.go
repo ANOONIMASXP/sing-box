@@ -67,6 +67,9 @@ type clientState struct {
 }
 
 func NewClientEndpoint(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.MASQUEClientEndpointOptions) (adapter.Endpoint, error) {
+	if err := options.TCPCongestionControl.Validate(); err != nil {
+		return nil, err
+	}
 	if err := options.H3CongestionControl.Validate([]int{options.ResolvedVersion()}, true); err != nil {
 		return nil, err
 	}
@@ -265,6 +268,10 @@ func (c *ClientEndpoint) PortAddresses() (netip.Addr, netip.Addr) {
 
 func (c *ClientEndpoint) PortMTU() uint32 {
 	return c.device.PortMTU()
+}
+
+func (c *ClientEndpoint) UpstreamPort() any {
+	return c.device
 }
 
 func (c *ClientEndpoint) AttachReturn(returnPath tun.Return) error {

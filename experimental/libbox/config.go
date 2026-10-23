@@ -204,6 +204,10 @@ func (s *platformInterfaceStub) UsePlatformAutoRedirect() bool {
 	return false
 }
 
+func (s *platformInterfaceStub) CreateAutoRedirectListener(inet6 bool) (int, error) {
+	return -1, os.ErrInvalid
+}
+
 func (s *platformInterfaceStub) CreateAutoRedirect(options adapter.AutoRedirectOptions) (adapter.AutoRedirectSession, error) {
 	return nil, os.ErrInvalid
 }

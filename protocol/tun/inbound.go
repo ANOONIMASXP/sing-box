@@ -470,8 +470,8 @@ func (t *Inbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 		}
 		monitor.Start("open interface")
 		if t.platformInterface != nil && t.platformInterface.UsePlatformInterface() {
-			androidVPNRouteBypass := C.IsAndroid && t.usePlatformAutoRedirect &&
-				(len(t.routeRuleSet) > 0 || len(t.routeExcludeRuleSet) > 0)
+			// Routing bypass actions also need VPN route compatibility without address sets.
+			androidVPNRouteBypass := C.IsAndroid && t.usePlatformAutoRedirect
 			tunInterface, err = t.platformInterface.OpenInterface(&tunOptions, t.platformOptions, androidVPNRouteBypass)
 		} else {
 			tunInterface, err = tun.New(tunOptions)

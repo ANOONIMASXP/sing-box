@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sagernet/bbolt"
+
 	"github.com/sagernet/sing-box/common/hash"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/observable"
@@ -121,6 +122,7 @@ type CacheFile interface {
 	SaveSubscription(tag string, sub *SavedBinary) error
 
 	SmartDB() *bbolt.DB
+
 }
 
 type SavedBinary struct {

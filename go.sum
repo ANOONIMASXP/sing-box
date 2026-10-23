@@ -10,8 +10,6 @@ filippo.io/edwards25519 v1.2.0/go.mod h1:xzAOLCNug/yB62zG1bQ8uziwrIqIuxhctzJT18Q
 filippo.io/hpke v0.4.0 h1:p575VVQ6ted4pL+it6M00V/f2qTZITO0zgmdKCkd5+A=
 filippo.io/hpke v0.4.0/go.mod h1:EmAN849/P3qdeK+PCMkDpDm83vRHM5cDipBJ8xbQLVY=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
-github.com/MiChongs/sing-ebpf v0.1.0-alpha.21 h1:T5LP2GjOLr+IgerOvzaJBb60aAQVOZgCMHcpX1b7nAQ=
-github.com/MiChongs/sing-ebpf v0.1.0-alpha.21/go.mod h1:swwBAcOfGFH5R8n7yHwIrNRsaiE/didsG3gN9bqDLZM=
 github.com/RussellLuo/timingwheel v0.0.0-20220218152713-54845bda3108 h1:iPugyBI7oFtbDZXC4dnY093M1kZx6k/95sen92gafbY=
 github.com/RussellLuo/timingwheel v0.0.0-20220218152713-54845bda3108/go.mod h1:WAMLHwunr1hi3u7OjGV6/VWG9QbdMhGpEKjROiSFd10=
 github.com/RyuaNerin/go-krypto v1.3.0 h1:smavTzSMAx8iuVlGb4pEwl9MD2qicqMzuXR2QWp2/Pg=
@@ -271,8 +269,8 @@ github.com/reF1nd/sing-quic v0.7.2-0.20261005175123-6b634e78a4bd h1:wu0LsntsL20v
 github.com/reF1nd/sing-quic v0.7.2-0.20261005175123-6b634e78a4bd/go.mod h1:TABZAib9rXNY9J/g+fdL1gCwbEYn7zia2iuEgpbzd/Q=
 github.com/reF1nd/sing-snell v0.0.0-20260929062538-94040c75f854 h1:jfU3RgrP8k6W31UHG0BcEACa3u7NUnoXHonv4rDTNoU=
 github.com/reF1nd/sing-snell v0.0.0-20260929062538-94040c75f854/go.mod h1:et8Lws4f5QbOrY65DmjevHGup3mijJkhswkto6cwciM=
-github.com/reF1nd/sing-tun v0.9.7-0.20261005104437-f4f5a75b5d62 h1:z+fEqIx2UATfZ/tYjYONzr8r9c/bu8R8D1RG/jmFM4A=
-github.com/reF1nd/sing-tun v0.9.7-0.20261005104437-f4f5a75b5d62/go.mod h1:liMb9HPIWcFWqF6VJ/ttIY8fTSRPdRltBeSeEcXt1Dk=
+github.com/reF1nd/sing-tun v0.9.7-0.20261009120252-3a38f1971879 h1:XbgWtOvuXVVrdnRIQeMbqyZkBTMkkO1qu0m10mcp8a4=
+github.com/reF1nd/sing-tun v0.9.7-0.20261009120252-3a38f1971879/go.mod h1:liMb9HPIWcFWqF6VJ/ttIY8fTSRPdRltBeSeEcXt1Dk=
 github.com/reF1nd/wireguard-go v0.0.8-0.20261005151230-5fa91e620316 h1:9lnIN3sh/gQLw5FLP+6ZW7J47dWj/HgdUk6IBBH36VI=
 github.com/reF1nd/wireguard-go v0.0.8-0.20261005151230-5fa91e620316/go.mod h1:er10sELpmzLXq7S7Pbc1Zsbyapcr+/gxNAHKTo6fzVA=
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=

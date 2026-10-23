@@ -353,8 +353,7 @@ func urlTestWithDetailAndStatus(ctx context.Context, link string, detour N.Diale
 	if err != nil {
 		return 0, err
 	}
-
-	// ── Phase 3: first request (cold conn) ──
+	// ─── Phase 3: first request (cold conn) ───
 	probe1 := newProbeTrace()
 	resp, err := client.Do(baseReq.WithContext(httptrace.WithClientTrace(ctx, probe1.hooks())))
 	if err != nil {
@@ -369,7 +368,7 @@ func urlTestWithDetailAndStatus(ctx context.Context, link string, detour N.Diale
 	start := dialStart
 	firstByteMS := probe1.firstByteMS()
 
-	// ── Phase 4 (optional): warm-conn second request for unified_delay ──
+	// ─── Phase 4 (optional): warm-conn second request for unified_delay ───
 	if UnifiedDelayFromContext(ctx) {
 		probe2 := newProbeTrace()
 		second := time.Now()

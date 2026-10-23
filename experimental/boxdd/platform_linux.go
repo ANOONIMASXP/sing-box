@@ -205,6 +205,10 @@ func (p *linuxPlatformInterface) UsePlatformAutoRedirect() bool {
 	return false
 }
 
+func (p *linuxPlatformInterface) CreateAutoRedirectListener(inet6 bool) (int, error) {
+	return -1, os.ErrInvalid
+}
+
 func (p *linuxPlatformInterface) CreateAutoRedirect(options adapter.AutoRedirectOptions) (adapter.AutoRedirectSession, error) {
 	return nil, os.ErrInvalid
 }

@@ -165,6 +165,7 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 	if adapter.NeedOutboundDialTrace(chain) {
 		ctx = adapter.ContextWithOutboundDialTrace(ctx, new(adapter.OutboundDialTrace))
 	}
+
 	for _, tracker := range r.trackers {
 		conn = tracker.RoutedConnection(ctx, conn, metadata, selectedRule, selectedOutbound)
 	}
@@ -215,6 +216,7 @@ func resolveOutbound(outbound adapter.Outbound, network string, metadata *adapte
 			// member it actually picked.
 			break
 		}
+
 		if connectionGroup, ok := group.(adapter.ConnectionOutboundGroup); ok {
 			selectionMetadata := *metadata
 			selectionMetadata.Network = network
@@ -369,6 +371,7 @@ func (r *Router) routePacketConnection(ctx context.Context, conn N.PacketConn, m
 	if adapter.NeedOutboundDialTrace(chain) {
 		ctx = adapter.ContextWithOutboundDialTrace(ctx, new(adapter.OutboundDialTrace))
 	}
+
 	for _, tracker := range r.trackers {
 		conn = tracker.RoutedPacketConnection(ctx, conn, metadata, selectedRule, selectedOutbound)
 	}

@@ -13,14 +13,15 @@ import (
 )
 
 type MASQUEEndpointOptions struct {
-	InnerDomainResolver *DomainResolveOptions `json:"inner_domain_resolver,omitempty"`
-	System              bool                  `json:"system,omitempty"`
-	GSO                 *bool                 `json:"gso,omitempty"`
-	Name                string                `json:"name,omitempty"`
-	MTU                 uint32                `json:"mtu,omitempty"`
-	UDPMapping          UDPNATBehavior        `json:"udp_mapping,omitempty"`
-	UDPFiltering        UDPNATBehavior        `json:"udp_filtering,omitempty"`
-	UDPNATMax           uint32                `json:"udp_nat_max,omitempty"`
+	TCPCongestionControl TCPCongestionControl  `json:"tcp_congestion_control,omitempty" enum:"reno,cubic,bbr"`
+	InnerDomainResolver  *DomainResolveOptions `json:"inner_domain_resolver,omitempty"`
+	System               bool                  `json:"system,omitempty"`
+	GSO                  *bool                 `json:"gso,omitempty"`
+	Name                 string                `json:"name,omitempty"`
+	MTU                  uint32                `json:"mtu,omitempty"`
+	UDPMapping           UDPNATBehavior        `json:"udp_mapping,omitempty"`
+	UDPFiltering         UDPNATBehavior        `json:"udp_filtering,omitempty"`
+	UDPNATMax            uint32                `json:"udp_nat_max,omitempty"`
 }
 
 func (o *MASQUEEndpointOptions) TakeInnerDomainResolverOptions() *DomainResolveOptions {
@@ -56,7 +57,11 @@ func (o MASQUEClientEndpointOptions) ResolvedVersion() int {
 }
 
 func (o MASQUEClientEndpointOptions) MarshalJSON() ([]byte, error) {
-	return badjson.MarshallObjects(_MASQUEClientEndpointOptions(o), httpVersionVariant(o.ResolvedVersion(), o.HTTP2Options, o.HTTP3Options))
+	variant := httpVersionVariant(o.ResolvedVersion(), o.HTTP2Options, o.HTTP3Options)
+	if variant == nil {
+		return json.Marshal(_MASQUEClientEndpointOptions(o))
+	}
+	return badjson.MarshallObjects(_MASQUEClientEndpointOptions(o), variant)
 }
 
 func (o *MASQUEClientEndpointOptions) UnmarshalJSONContext(ctx context.Context, content []byte) error {
@@ -108,7 +113,11 @@ func (o MASQUEServerEndpointOptions) Versions() []int {
 }
 
 func (o MASQUEServerEndpointOptions) MarshalJSON() ([]byte, error) {
-	return badjson.MarshallObjects(_MASQUEServerEndpointOptions(o), httpVersionsVariant(o.Versions(), o.HTTP2Options, o.HTTP3Options))
+	variant := httpVersionsVariant(o.Versions(), o.HTTP2Options, o.HTTP3Options)
+	if variant == nil {
+		return json.Marshal(_MASQUEServerEndpointOptions(o))
+	}
+	return badjson.MarshallObjects(_MASQUEServerEndpointOptions(o), variant)
 }
 
 func (o *MASQUEServerEndpointOptions) UnmarshalJSONContext(ctx context.Context, content []byte) error {

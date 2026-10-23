@@ -227,7 +227,7 @@ func (s *ServerEndpoint) Start(stage adapter.StartStage, scope *adapter.Scope) e
 		if err == nil {
 			tuneOpenVPNUDPSocket(packetConn)
 			if egressEnabled {
-				udpConn := packetConn.(*net.UDPConn)
+				udpConn := s.listener.UDPConn()
 				networkManager := service.FromContext[adapter.NetworkManager](s.ctx)
 				egressPool := tun.NewUDPEgressPool(tun.UDPEgressPoolOptions{
 					Logger:           s.logger,
@@ -669,6 +669,10 @@ func (s *ServerEndpoint) PortAddresses() (netip.Addr, netip.Addr) {
 
 func (s *ServerEndpoint) PortMTU() uint32 {
 	return s.device.PortMTU()
+}
+
+func (s *ServerEndpoint) UpstreamPort() any {
+	return s.device
 }
 
 func (s *ServerEndpoint) AttachReturn(returnPath tun.Return) error {
