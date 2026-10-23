@@ -12,7 +12,7 @@ replace (
 	github.com/sagernet/sing-box => ../
 	github.com/sagernet/sing-quic => github.com/reF1nd/sing-quic v0.7.2-0.20261005175123-6b634e78a4bd
 	github.com/sagernet/sing-snell => github.com/reF1nd/sing-snell v0.0.0-20260929062538-94040c75f854
-	github.com/sagernet/sing-tun => github.com/reF1nd/sing-tun v0.9.7-0.20261005104437-f4f5a75b5d62
+	github.com/sagernet/sing-tun => github.com/reF1nd/sing-tun v0.9.7-0.20261009120252-3a38f1971879
 	github.com/sagernet/wireguard-go => github.com/reF1nd/wireguard-go v0.0.8-0.20261005151230-5fa91e620316
 )
 
@@ -29,7 +29,7 @@ require (
 	github.com/sagernet/sing-shadowsocks v0.2.9-0.20260929204512-65740e0f0e3e
 	github.com/sagernet/sing-shadowsocks2 v0.2.2-0.20260929152114-a69d1086332b
 	github.com/sagernet/sing-snell v0.0.0-20260904135315-bc5a12ac736f
-	github.com/sagernet/sing-tun v0.9.7-0.20261002083955-3f8acd9da65b
+	github.com/sagernet/sing-tun v0.9.7-0.20261009022811-5c2edb183cc9
 	github.com/sagernet/tailscale v1.102.1-sing-box-1.14-mod.5.0.20260925112514-35e61219dedd
 	github.com/spyzhov/ajson v0.9.4
 	github.com/stretchr/testify v1.12.0
@@ -92,7 +92,6 @@ require (
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
-	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/certificate-transparency-go v1.3.2 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
