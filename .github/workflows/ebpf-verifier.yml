@@ -38,20 +38,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      # go.mod replaces github.com/MiChongs/sing-ebpf with the local
-      # ./sing-ebpf directory, so every go command needs that checkout.
-      # The ref matches the local clone's baseline (v0.1.0-alpha.26).
+      # go.mod replaces github.com/ANOONIMASXP/sing-ebpf with the local
+      # ../sing-ebpf directory (outside the runner workspace), so the
+      # checkout below lands at ./sing-ebpf and a go mod edit step
+      # rewrites the replace to that path for CI only.
       - name: Checkout sing-ebpf
         uses: actions/checkout@v6
         with:
-          repository: MiChongs/sing-ebpf
-          ref: v0.1.0-alpha.26
+          repository: ANOONIMASXP/sing-ebpf
+          ref: local
           path: sing-ebpf
 
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
           go-version: 1.26.8
+
+      - name: Point local replace at CI checkout
+        run: go mod edit -replace github.com/ANOONIMASXP/sing-ebpf=./sing-ebpf
 
       - name: Test sing-box integration
         run: |
@@ -66,7 +70,7 @@ jobs:
       - name: Test sing-ebpf compatibility and object ABI
         run: |
           set -euo pipefail
-          sing_ebpf_dir="$(go list -m -f '{{.Dir}}' github.com/MiChongs/sing-ebpf)"
+          sing_ebpf_dir="$(go list -m -f '{{.Dir}}' github.com/ANOONIMASXP/sing-ebpf)"
           sing_ebpf_sing_version="$(awk '$1 == "github.com/sagernet/sing" { print $2; exit }' "$sing_ebpf_dir/go.mod")"
           selected_sing_version="$(go list -m -f '{{.Version}}' github.com/sagernet/sing)"
           echo "sing-ebpf requires sing $sing_ebpf_sing_version"
@@ -75,7 +79,7 @@ jobs:
             echo "::notice::sing-ebpf has an older sing requirement; tests use sing-box's selected version"
           fi
           go test -tags with_ebpf \
-            github.com/MiChongs/sing-ebpf/... \
+            github.com/ANOONIMASXP/sing-ebpf/... \
             ./protocol/ebpf
 
       # sing-ebpf owns verifier, program-run, attachment and packet-path tests.

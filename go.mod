@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	filippo.io/age v1.3.1
-	github.com/MiChongs/sing-ebpf v0.1.0-alpha.26
+	github.com/ANOONIMASXP/sing-ebpf v0.1.0-alpha.26
 	github.com/RussellLuo/timingwheel v0.0.0-20220218152713-54845bda3108
 	github.com/VividCortex/ewma v1.2.0
 	github.com/anthropics/anthropic-sdk-go v1.26.0
@@ -98,7 +98,7 @@ require (
 )
 
 replace (
-	github.com/MiChongs/sing-ebpf => ./sing-ebpf
+	github.com/ANOONIMASXP/sing-ebpf => ../sing-ebpf
 	github.com/sagernet/quic-go => github.com/reF1nd/quic-go v0.61.0-sing-box-mod.9.0.20261005174718-e897ed66d562
 	github.com/sagernet/sing => github.com/reF1nd/sing v0.9.7-0.20261005174720-97b52bac92a7
 	github.com/sagernet/sing-anytls => github.com/reF1nd/sing-anytls v0.0.0-20261005110320-ca02db16051a

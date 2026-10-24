@@ -3,7 +3,7 @@
 package ebpf
 
 import (
-	kernelRuntime "github.com/MiChongs/sing-ebpf/runtime"
+	kernelRuntime "github.com/ANOONIMASXP/sing-ebpf/runtime"
 )
 
 type sharedKernelRuntime = kernelRuntime.SharedPacketRewriteRuntime

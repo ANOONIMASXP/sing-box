@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	ECommon "github.com/MiChongs/sing-ebpf"
+	ECommon "github.com/ANOONIMASXP/sing-ebpf"
 	"github.com/sagernet/sing-box/common/listener"
 	"github.com/sagernet/sing-box/option"
 	E "github.com/sagernet/sing/common/exceptions"

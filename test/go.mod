@@ -5,7 +5,7 @@ go 1.25.5
 require github.com/sagernet/sing-box v0.0.0
 
 replace (
-	github.com/MiChongs/sing-ebpf => ../sing-ebpf
+	github.com/ANOONIMASXP/sing-ebpf => ../../sing-ebpf
 	github.com/sagernet/quic-go => github.com/reF1nd/quic-go v0.61.0-sing-box-mod.9.0.20261005174718-e897ed66d562
 	github.com/sagernet/sing => github.com/reF1nd/sing v0.9.7-0.20261005174720-97b52bac92a7
 	github.com/sagernet/sing-anytls => github.com/reF1nd/sing-anytls v0.0.0-20261005110320-ca02db16051a
@@ -40,8 +40,8 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
+	github.com/ANOONIMASXP/sing-ebpf v0.1.0-alpha.26 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
-	github.com/MiChongs/sing-ebpf v0.1.0-alpha.26 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/RussellLuo/timingwheel v0.0.0-20220218152713-54845bda3108 // indirect
 	github.com/RyuaNerin/go-krypto v1.3.0 // indirect

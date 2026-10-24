@@ -5,7 +5,7 @@ package route
 import (
 	"sync/atomic"
 
-	commonEBPF "github.com/MiChongs/sing-ebpf"
+	commonEBPF "github.com/ANOONIMASXP/sing-ebpf"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 

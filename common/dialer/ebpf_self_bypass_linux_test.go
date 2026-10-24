@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"testing"
 
-	commonEBPF "github.com/MiChongs/sing-ebpf"
+	commonEBPF "github.com/ANOONIMASXP/sing-ebpf"
 	"github.com/sagernet/sing-box/adapter"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"

@@ -6,8 +6,8 @@ import (
 	"net/netip"
 	"slices"
 
-	commonEBPF "github.com/MiChongs/sing-ebpf"
-	kernelRuntime "github.com/MiChongs/sing-ebpf/runtime"
+	commonEBPF "github.com/ANOONIMASXP/sing-ebpf"
+	kernelRuntime "github.com/ANOONIMASXP/sing-ebpf/runtime"
 	"github.com/sagernet/sing/common/control"
 )
 

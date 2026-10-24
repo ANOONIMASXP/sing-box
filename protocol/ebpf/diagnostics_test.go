@@ -15,7 +15,7 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/option"
 
-	commonEBPF "github.com/MiChongs/sing-ebpf"
+	commonEBPF "github.com/ANOONIMASXP/sing-ebpf"
 )
 
 type captureLogger struct {
