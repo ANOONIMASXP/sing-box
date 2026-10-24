@@ -184,7 +184,7 @@ force-intercept prefix before all bypass checks.
 
 Multiple IPv4 and IPv6 prefixes are supported. Local and shared sets are
 independent, and can coexist with FakeIP prefixes. Duplicate prefixes are
-normalized; a local force prefix never forces the shared path.
+normalized; a local force prefix never forces the shared path. `fakeip_icmp: reply` answers only the fake-ip range.
 
 Typical use: keep a VPN/CGNAT range such as Tailscale's `100.64.0.0/10` (and
 IPv6 `fd7a:115c:a1e0::/48`) intercepted so tailnet traffic can reach a

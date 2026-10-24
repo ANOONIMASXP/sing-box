@@ -210,14 +210,16 @@ func appendDestinationPolicy(
 			Prefix: prefix, Action: commonEBPF.DecisionIntercept,
 		})
 	}
+	// Only fake-ip addresses have no real host, so only they are answered by
+	// the local ICMP echo responder.
 	if fakeIPv4.IsValid() {
 		scope.DestinationCIDR = append(scope.DestinationCIDR, commonEBPF.CIDRDecision{
-			Prefix: fakeIPv4, Action: commonEBPF.DecisionIntercept,
+			Prefix: fakeIPv4, Action: commonEBPF.DecisionIntercept, EchoReply: true,
 		})
 	}
 	if fakeIPv6.IsValid() {
 		scope.DestinationCIDR = append(scope.DestinationCIDR, commonEBPF.CIDRDecision{
-			Prefix: fakeIPv6, Action: commonEBPF.DecisionIntercept,
+			Prefix: fakeIPv6, Action: commonEBPF.DecisionIntercept, EchoReply: true,
 		})
 	}
 	appendPortDecisions(scope, bypassPorts, dnsMode, enableTCP, enableUDP)

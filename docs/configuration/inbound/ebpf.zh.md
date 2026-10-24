@@ -169,6 +169,7 @@ DNS。上述筛选仍然作用于普通的非 DNS 流量，因此 `hijack` 不�
 
 支持多个 IPv4 和 IPv6 前缀，可以与 FakeIP 同时使用。前缀会规范化并去重；
 local 和 shared 的集合完全独立，本机强制接管前缀不会传播到 shared 路径。
+`fakeip_icmp: reply` 只应答 fake-ip 范围。
 
 典型用途：让 VPN/CGNAT 网段（如 Tailscale 的 `100.64.0.0/10` 及 IPv6
 `fd7a:115c:a1e0::/48`）保持被接管，使 tailnet 流量能够到达 `tailscale`
