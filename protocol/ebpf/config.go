@@ -73,6 +73,9 @@ func normalizeLocalDataPlane(options option.EBPFLocalOptions) (string, string, e
 	if dataPlane == "" {
 		dataPlane = localDataPlaneCgroup
 	}
+	if dataPlane == "tc" {
+		return "", "", E.New("local.data_plane \"tc\" was renamed to \"socket_assign\", which delivers through an isolated network namespace")
+	}
 	if dataPlane != localDataPlaneSocketAssign && dataPlane != localDataPlaneCgroup {
 		return "", "", E.New("unknown local.data_plane: ", dataPlane)
 	}
