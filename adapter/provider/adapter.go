@@ -132,9 +132,10 @@ func NewAdapter(ctx context.Context, router adapter.Router, outbound adapter.Out
 }
 
 func (a *Adapter) Start() error {
-	a.history = service.PtrFromContext[urltest.HistoryStorage](a.ctx)
-	if a.history == nil {
-		return E.New("missing URL test history storage")
+	if historyFromCtx := service.PtrFromContext[urltest.HistoryStorage](a.ctx); historyFromCtx != nil {
+		a.history = historyFromCtx
+	} else {
+		a.history = urltest.NewHistoryStorage()
 	}
 	if a.enabled || a.udp != nil {
 		a.ticker = time.NewTicker(a.interval)

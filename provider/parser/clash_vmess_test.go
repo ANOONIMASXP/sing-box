@@ -43,8 +43,11 @@ proxies:
 					require.Empty(t, endpoints)
 					require.Len(t, outbounds, 1)
 					options := outbounds[0].Options.(*option.VMessOutboundOptions)
+					// Foreign formats pin both "auto" and a missing cipher to
+					// the platform AEAD (resolveVMessAutoSecurity), so empty
+					// cipher resolves like "auto"; explicit ciphers pass through.
 					expectedSecurity := cipher
-					if cipher == "auto" {
+					if cipher == "auto" || cipher == "" {
 						expectedSecurity = autoSecurity
 					}
 					require.Equal(t, expectedSecurity, options.Security)
@@ -81,6 +84,11 @@ func TestParseVMessAutoSecurityOtherFormats(t *testing.T) {
 		}`))
 		outbound, err := ParseSubscriptionLink(link)
 		require.NoError(t, err)
-		require.Equal(t, "auto", outbound.Options.(*option.VMessOutboundOptions).Security)
+		autoSecurity := "chacha20-poly1305"
+		switch runtime.GOARCH {
+		case "amd64", "arm64", "s390x":
+			autoSecurity = "aes-128-gcm"
+		}
+		require.Equal(t, autoSecurity, outbound.Options.(*option.VMessOutboundOptions).Security)
 	})
 }

@@ -40,6 +40,16 @@ func (m *stubOutboundManager) Create(_ context.Context, _ adapter.Router, _ log.
 	return nil
 }
 
+func (m *stubOutboundManager) Replace(_ context.Context, _ adapter.Router, _ log.ContextLogger, tag string, _ string, _ any) error {
+	m.outbounds[tag] = &stubOutbound{tag: tag}
+	return nil
+}
+
+func (m *stubOutboundManager) Remove(tag string) error {
+	delete(m.outbounds, tag)
+	return nil
+}
+
 type stubEndpointManager struct {
 	adapter.EndpointManager
 }

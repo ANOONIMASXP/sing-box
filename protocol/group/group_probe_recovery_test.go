@@ -28,14 +28,10 @@ func startRecoveryTestServer(t *testing.T) string {
 func shortenRecoveryDelays(t *testing.T) {
 	t.Helper()
 	previousDelay, previousBackoff := groupFailureProbeDelay, groupStartupProbeBackoff
-	previousURLTestDelay, previousURLTestBackoff := urlTestFailureProbeDelay, urlTestStartupBackoff
 	groupFailureProbeDelay = 10 * time.Millisecond
 	groupStartupProbeBackoff = []time.Duration{10 * time.Millisecond, 10 * time.Millisecond, 10 * time.Millisecond}
-	urlTestFailureProbeDelay = 10 * time.Millisecond
-	urlTestStartupBackoff = groupStartupProbeBackoff
 	t.Cleanup(func() {
 		groupFailureProbeDelay, groupStartupProbeBackoff = previousDelay, previousBackoff
-		urlTestFailureProbeDelay, urlTestStartupBackoff = previousURLTestDelay, previousURLTestBackoff
 	})
 }
 
@@ -75,7 +71,7 @@ func TestLoadBalanceFailedMemberIsDroppedAndInterrupted(t *testing.T) {
 	dead := &probeTestOutbound{tag: "dead"}
 	alive := &probeTestOutbound{tag: "alive"}
 	dead.failing.Store(true)
-	group, err := NewLoadBalanceGroup(context.Background(), nil, log.NewNOPFactory().Logger(), []adapter.Outbound{dead, alive}, startRecoveryTestServer(t), time.Minute, time.Hour, 0, StrategyRoundRobin)
+	group, err := NewLoadBalanceGroup(context.Background(), nil, log.NewNOPFactory().Logger(), []adapter.Outbound{dead, alive}, startRecoveryTestServer(t), time.Minute, time.Hour, 0, StrategyRoundRobin, nil)
 	require.NoError(t, err)
 	group.history = history
 	group.lastActive.Store(time.Now())
