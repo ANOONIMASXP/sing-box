@@ -152,10 +152,23 @@ waiting for an interface; a cgroup attachment has no network-interface filter.
 
 For local cgroup, also record the effective runtime fields returned by the API:
 `local_cgroup_attach_mode` (`link_create`, `legacy_multi`,
-`legacy_exclusive`, or `mixed`), `local_udp_cleanup_mode`,
+`legacy_exclusive`, `legacy_netd_replace`, or `mixed`), `local_udp_cleanup_mode`,
 `local_udp_userspace_cleanup_mode`, `local_udp_storage_mode`, and
 `local_udp_time_mode`. These describe the path actually selected after vendor
 kernel and security-policy fallbacks; they are not capability guesses.
+
+The UDP socket-release path is reported separately:
+
+- `local_udp_release_program` is the socket-release program in use:
+  `sb_ebpf_rel_notify` notifies userspace of each release, `sb_ebpf_rel` only
+  cleans kernel state. It is absent when the kernel offers no socket-release
+  hook.
+- `local_udp_release_observer` is true when release notifications reach
+  userspace.
+- `local_udp_release_fallback_reason` names why they do not:
+  `socket_release_unsupported`, `ringbuf_unsupported`,
+  `ringbuf_map_load_failed`, `ringbuf_reader_unavailable`, or
+  `release_notification_program_load_failed`.
 
 When local socket assignment or shared `socket_assign` is enabled, the API also reports `tc_*`
 runtime fields: the effective `tcx`/`clsact`/`mixed` attachment mechanism,
@@ -191,9 +204,11 @@ interpreting a single large number:
   `category: configured_policy` identifies a policy-sized map whose capacity
   comes from the compiled policy; `pressure: configured` is retained as the
   corresponding neutral result. `recovery_failed` means key iteration itself
-  failed. Do not
-  interpret any of these states as zero occupancy. A top-level `error` means
-  map enumeration or inspection was denied before all maps could be observed.
+  failed. Do not interpret any of these states as zero occupancy. The overall
+  status reflects measured occupancy (`warning` or `degraded`) and becomes
+  `degraded` when key iteration failed; `not_applicable` and `configured` maps
+  do not change it. A top-level `error` means map enumeration or inspection was
+  denied before all maps could be observed.
 
 Program/map enumeration uses the `sb_` naming convention and can see another
 visible sing-ebpf process in the same kernel. Per-inbound attachments, policy
@@ -213,6 +228,11 @@ produce a different result from the service manager.
   program points to the selected hierarchy, delegation, multi/exclusive attach
   support, or an existing hook such as Android netd. The cgroup fallback mode
   selected at startup matters.
+- `refusing to replace existing cgroup program owner` means another program
+  holds the hook in single-program mode; the error names the owners and why
+  they were kept. The only owner sing-box replaces is the Android 15+ netd
+  pass-through placeholder, reported as `legacy_netd_replace`. For any other
+  owner, free the hook or use `local.data_plane=tc`.
 - TC attach failure after a successful probe requires the actual link type,
   qdisc/filter inventory, interface lock result, and netlink error. The probe
   intentionally does not modify qdiscs.
@@ -340,6 +360,13 @@ If cleanup reports an error, preserve the exact object/interface identifiers
 and retry by starting then gracefully stopping the same build before manual
 removal. Manual cleanup should be the last step and must target only positively
 identified sing-box-owned state.
+
+On a device where the inbound took over netd hooks, a graceful stop puts netd's
+placeholder back. If the process is killed, the hooks stay taken over until the
+next start, which restores netd's program before attaching again. An
+`sb_hook_allow` program on those hooks is a pass-through stand-in for netd's
+placeholder, used when netd's pinned program is unavailable. Leave it attached:
+an emptied hook makes a restarting netd abort.
 
 ## Privacy
 

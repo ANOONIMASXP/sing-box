@@ -8,15 +8,15 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"syscall"
-	"unicode"
 
 	"github.com/sagernet/sing-box/adapter"
+	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-tun"
+	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
@@ -27,6 +27,10 @@ const (
 )
 
 var _ Searcher = (*linuxSearcher)(nil)
+
+// androidZygotePath prefixes the executables of zygote-forked processes, which
+// carry no per-application path.
+const androidZygotePath = "/system/bin/app_process"
 
 type linuxSearcher struct {
 	logger           log.ContextLogger
@@ -95,6 +99,10 @@ func (s *linuxSearcher) FindProcessInfoMode(ctx context.Context, network string,
 			return nil, err
 		}
 		s.logger.DebugContext(ctx, "find process path: ", err)
+	} else if C.IsAndroid {
+		processInfo.ProcessPaths = common.Filter(processPaths, func(processPath string) bool {
+			return !strings.HasPrefix(processPath, androidZygotePath)
+		})
 	} else {
 		processInfo.ProcessPaths = processPaths
 	}
@@ -139,65 +147,8 @@ func (s *linuxSearcher) resolveSocketByNetlink(network string, source netip.Addr
 	return dumpSocketDiag(family, protocol, source, destination)
 }
 
-func buildProcessPaths(ctx context.Context, uid uint32) (map[uint32][]string, error) {
-	files, err := os.ReadDir(pathProc)
-	if err != nil {
-		return nil, err
-	}
-	buffer := make([]byte, syscall.PathMax)
-	processPaths := make(map[uint32][]string)
-	for _, file := range files {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if !file.IsDir() || !isPid(file.Name()) {
-			continue
-		}
-		info, err := file.Info()
-		if err != nil {
-			if isIgnorableProcError(err) {
-				continue
-			}
-			return nil, err
-		}
-		if uid != processPathsAllUsers && info.Sys().(*syscall.Stat_t).Uid != uid {
-			continue
-		}
-		processPath := filepath.Join(pathProc, file.Name())
-		fdPath := filepath.Join(processPath, "fd")
-		exePath, err := os.Readlink(filepath.Join(processPath, "exe"))
-		if err != nil {
-			if isIgnorableProcError(err) {
-				continue
-			}
-			return nil, err
-		}
-		fds, err := os.ReadDir(fdPath)
-		if err != nil {
-			continue
-		}
-		for _, fd := range fds {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			n, err := syscall.Readlink(filepath.Join(fdPath, fd.Name()), buffer)
-			if err != nil {
-				continue
-			}
-			inode, ok := parseSocketInode(buffer[:n])
-			if !ok {
-				continue
-			}
-			if !slices.Contains(processPaths[inode], exePath) {
-				processPaths[inode] = append(processPaths[inode], exePath)
-			}
-		}
-	}
-	return processPaths, nil
-}
-
 func isIgnorableProcError(err error) bool {
-	return os.IsNotExist(err) || os.IsPermission(err)
+	return os.IsNotExist(err) || os.IsPermission(err) || errors.Is(err, syscall.ESRCH) || errors.Is(err, syscall.ENOTDIR)
 }
 
 func parseSocketInode(link []byte) (uint32, bool) {
@@ -216,10 +167,4 @@ func parseSocketInode(link []byte) (uint32, bool) {
 		}
 	}
 	return uint32(inode), true
-}
-
-func isPid(s string) bool {
-	return strings.IndexFunc(s, func(r rune) bool {
-		return !unicode.IsDigit(r)
-	}) == -1
 }

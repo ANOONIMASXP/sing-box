@@ -136,10 +136,27 @@ the cgroup path follows the selected cgroup v2 subtree.
 Absolute cgroup v2 subtree used by the `cgroup` data plane. When omitted, the
 visible cgroup v2 root and its descendants are intercepted.
 
-On Android, a vendor netd cgroup hook can conflict with attachment. sing-box
-prefers multi-program attachment and falls back to legacy exclusive attachment
-only for compatible errors. Use local `socket_assign` if the device cannot safely share
-the root cgroup hook.
+Sockets bound to an interface, such as the ones systemd-resolved uses for its
+DNS servers, are intercepted as well. Their route lookups require the bound
+interface, so sing-box installs the redirect prefixes as local routes
+(protocol 83 in table `local`) on every interface that is up and has an address
+of the matching family, and updates them as interfaces and addresses change.
+
+sing-box prefers multi-program attachment and falls back to legacy exclusive
+attachment only for compatible errors.
+
+On Android 15 and later, netd keeps a pass-through placeholder on the connect,
+sendmsg and recvmsg hooks of the cgroup v2 root in single-program mode, which
+blocks multi-program attachment to those hooks in every cgroup. sing-box
+replaces the placeholder while the inbound runs and restores it when the
+inbound stops; the API reports this as attach mode `legacy_netd_replace`. While
+the inbound holds these hooks, eBPF process tracking and a second inbound using
+the cgroup data plane cannot attach to them, so process lookup falls back to
+userspace search. netd's socket-release program is never replaced, so UDP
+cleanup uses the bounded LRU fallback on such devices.
+
+Any other program holding a hook exclusively is kept, and startup fails with an
+error naming it. Use local `socket_assign` in that case.
 
 ### local.dns_mode
 
@@ -307,9 +324,8 @@ Bypasses private and special-use destinations. Default is `true`.
 ### shared.bypass_exclude
 
 Like `local.bypass_exclude`, but for the shared data plane: CIDR prefixes
-that are force-intercepted ahead of every shared bypass decision. At most one
-IPv4 and one IPv6 prefix is accepted, and a prefix that overlaps the DNS
-fake-ip range is rejected at startup.
+that are force-intercepted ahead of every shared bypass decision. Multiple
+IPv4 and IPv6 prefixes are supported, independently of `local.bypass_exclude`.
 
 ### shared.bypass_rule_set
 
@@ -366,8 +382,8 @@ any matching exclude selector takes precedence.
 - `sing-box api ebpf` reads attachments, recovery state, active programs, map
   occupancy, resource use, UDP/session statistics, fragment/pass counters, and
   failures from a running instance. For local cgroup it also reports the
-  effective attach, UDP cleanup, socket-storage, and time-source modes after
-  fallback. It requires the
+  effective attach, UDP cleanup, socket-storage, and time-source modes and the
+  UDP socket-release path after fallback. It requires the
   [sing-box API service](/configuration/service/api/).
 
 For local socket assignment and shared `socket_assign`, the response also reports the effective

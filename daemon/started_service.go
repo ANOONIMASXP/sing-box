@@ -743,13 +743,20 @@ func (s *StartedService) URLTest(ctx context.Context, request *URLTestRequest) (
 		go group.URLTestOutbounds(boxService.ctx, boxService.outboundManager, historyStorage, boxService.logFactory.Logger(), outbounds, "", 0, true)
 	} else {
 		go func() {
-			t, err := urltest.URLTest(boxService.ctx, "", outbound)
-			if err != nil {
-				historyStorage.DeleteURLTestHistory(outboundTag)
+			result := historyStorage.Prober().Probe(boxService.ctx, urltest.ProbeRequest{
+				Tag:     outboundTag,
+				Dialer:  outbound,
+				Timeout: C.TCPTimeout,
+				Since:   time.Now(),
+			})
+			if result.Err != nil {
+				if boxService.ctx.Err() == nil {
+					historyStorage.DeleteURLTestHistory(outboundTag)
+				}
 			} else {
 				historyStorage.StoreURLTestHistory(outboundTag, &adapter.URLTestHistory{
-					Time:  time.Now(),
-					Delay: t,
+					Time:  result.Time,
+					Delay: result.Delay,
 				})
 			}
 		}()
@@ -1179,6 +1186,11 @@ func (s *StartedService) GetDeprecatedWarnings(ctx context.Context, empty *empty
 	selectedLocale := locale.FromContext(ctx)
 	return &DeprecatedWarnings{
 		Warnings: common.Map(notes, func(it deprecated.Note) *DeprecatedWarning {
+			// upstream's DeprecatedWarning proto only exposes Message /
+			// Impending / MigrationLink. Description / DeprecatedVersion /
+			// ScheduledVersion were xiaobaf14g-local fields — drop them
+			// when bringing upstream's pb back, since the proto lives in
+			// a .pb.go generated file we don't patch by hand.
 			return &DeprecatedWarning{
 				Message:           it.MessageForLocale(selectedLocale),
 				Impending:         it.Impending(),

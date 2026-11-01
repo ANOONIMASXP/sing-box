@@ -38,9 +38,9 @@ func newRouteLoadBalance(t *testing.T, strategy string) *group.LoadBalance {
 	})
 	require.NoError(t, err)
 	balance := outbound.(*group.LoadBalance)
-	scope := adapter.NewScope(ctx, logger.NOP())
-	require.NoError(t, balance.Start(adapter.StartStateStart, scope))
+	scope := adapter.NewScope(context.Background(), logger.NOP())
 	t.Cleanup(func() { require.NoError(t, scope.Close()) })
+	require.NoError(t, balance.Start(adapter.StartStateStart, scope))
 	return balance
 }
 
@@ -112,7 +112,7 @@ type failureListenerGroup struct {
 	calls int
 }
 
-func (g *failureListenerGroup) OnConnectionFailure(context.Context) { g.calls++ }
+func (g *failureListenerGroup) OnConnectionFailure(context.Context, adapter.Outbound) { g.calls++ }
 
 type failureDialer struct{ N.Dialer }
 
@@ -127,7 +127,7 @@ func (failureDialer) ListenPacket(context.Context, M.Socksaddr) (net.PacketConn,
 func TestResolvedChainNotifiesDialFailure(t *testing.T) {
 	listener := new(failureListenerGroup)
 	metadata := adapter.InboundContext{Destination: M.ParseSocksaddr("example.com:443"), OutboundChain: []adapter.Outbound{listener}}
-	manager := NewConnectionManager(logger.NOP())
+	manager := NewConnectionManager(context.Background(), logger.NOP())
 	conn, peer := net.Pipe()
 	defer peer.Close()
 	manager.NewConnection(context.Background(), failureDialer{}, conn, metadata, nil)

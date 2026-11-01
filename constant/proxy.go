@@ -24,15 +24,20 @@ const (
 	TypeSSH                = "ssh"
 	TypeShadowTLS          = "shadowtls"
 	TypeAnyTLS             = "anytls"
+	TypeAnyX               = "anyx"
 	TypeShadowsocksR       = "shadowsocksr"
 	TypeVLESS              = "vless"
 	TypeTUIC               = "tuic"
 	TypeHysteria2          = "hysteria2"
+	TypeQUICX              = "quicx"
+	TypeNowhere            = "nowhere"
+	TypeNowhereEgress      = "nowhere-egress"
 	TypeOpenConnect        = "openconnect"
 	TypeOpenVPNClient      = "openvpn-client"
 	TypeOpenVPNServer      = "openvpn-server"
 	TypeMASQUEClient       = "masque-client"
 	TypeMASQUEServer       = "masque-server"
+	TypeEasyTier           = "easytier"
 	TypeTailscale          = "tailscale"
 	TypeTailcat            = "tailcat"
 	TypeCloudflared        = "cloudflared"
@@ -57,6 +62,7 @@ const (
 	TypeSmart            = "smart"
 	TypeSmartLoadBalance = "smart-loadbalance"
 	TypeSmartRegion      = "smart-region"
+	TypeNested           = "nested"
 )
 
 func ProxyDisplayName(proxyType string) string {
@@ -113,8 +119,16 @@ func ProxyDisplayName(proxyType string) string {
 		return "TUIC"
 	case TypeHysteria2:
 		return "Hysteria2"
+	case TypeQUICX:
+		return "QUICX"
+	case TypeNowhere:
+		return "Nowhere"
+	case TypeNowhereEgress:
+		return "Nowhere Egress"
 	case TypeAnyTLS:
 		return "AnyTLS"
+	case TypeAnyX:
+		return "AnyX"
 	case TypeOpenConnect:
 		return "OpenConnect"
 	case TypeOpenVPNClient:
@@ -125,6 +139,8 @@ func ProxyDisplayName(proxyType string) string {
 		return "MASQUE Client"
 	case TypeMASQUEServer:
 		return "MASQUE Server"
+	case TypeEasyTier:
+		return "EasyTier"
 	case TypeTailscale:
 		return "Tailscale"
 	case TypeTailcat:
@@ -137,6 +153,8 @@ func ProxyDisplayName(proxyType string) string {
 		return "URLTest"
 	case TypeLoadBalance:
 		return "LoadBalance"
+	case TypeNested:
+		return "Nested"
 	case TypeSmart, TypeSmartLoadBalance, TypeSmartRegion:
 		return "Smart"
 	default:

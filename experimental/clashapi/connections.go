@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/common/memstat"
 	"github.com/sagernet/sing-box/common/trafficcontrol"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/protocol/group"
@@ -47,7 +48,7 @@ func connectionsSnapshot(trafficManager *trafficcontrol.Manager) render.M {
 		"connections": common.Map(connections, func(metadata *trafficcontrol.TrackerMetadata) connectionObject {
 			return connectionObject(*metadata)
 		}),
-		"memory": inuseMemory(),
+		"memory": memstat.Inuse(),
 	}
 }
 

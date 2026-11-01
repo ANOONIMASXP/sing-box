@@ -22,9 +22,11 @@ but their kernel ownership, permissions, and link topology are different.
 
 ### Standard Linux and OpenWrt
 
-For a normal Linux host or OpenWrt router, run sing-box as root or grant the
-equivalent capabilities, normally `CAP_BPF` and `CAP_NET_ADMIN` (older kernels
-may also require `CAP_SYS_ADMIN`). The selected configuration must expose the
+For a normal Linux host or OpenWrt router, run sing-box as root. Creating the
+maps and programs needs `CAP_BPF` (or `CAP_SYS_ADMIN`), attachment needs
+`CAP_NET_ADMIN`, and startup cleanup reads attached programs by ID, which needs
+`CAP_SYS_ADMIN`; kernels before 5.11 also need `CAP_SYS_RESOURCE` to raise the
+memlock limit. The selected configuration must expose the
 required BPF syscall, maps, helpers and TC classifiers. Both local socket assignment and shared
 `socket_assign` isolate TCP/UDP in a private namespace: they require
 `CONFIG_NET_NS`, `CONFIG_VETH`, `CAP_SYS_ADMIN` for creation/reentry (including
@@ -265,8 +267,9 @@ Startup needs enough privilege for the selected data plane to:
 
 Running as root is the most portable arrangement. Capability-only deployments
 depend on kernel version, distribution policy, LSM rules, and Android SELinux
-policy; they commonly require `CAP_NET_ADMIN`, `CAP_BPF`, and on older kernels
-`CAP_SYS_ADMIN`.
+policy; they need `CAP_BPF`, `CAP_NET_ADMIN`, and `CAP_SYS_ADMIN` (startup
+cleanup reads attached programs by ID), plus `CAP_SYS_RESOURCE` on kernels
+before 5.11.
 
 No `bpftool`, `tc`, or `ip` executable is required at runtime. sing-box uses BPF
 syscalls and netlink directly.

@@ -55,19 +55,22 @@ type EBPFRuntimeDiagnostics struct {
 	Tag           string
 	State         string
 
-	LocalEnabled                  bool
-	LocalDataPlane                string
-	LocalCgroupAttachMode         string
-	LocalSelfBypassMode           string
-	LocalSelfBypassCleanupMode    string
-	LocalUDPCleanupMode           string
-	LocalUDPUserspaceCleanupMode  string
-	LocalUDPStorageMode           string
-	LocalUDPTimeMode              string
-	LocalUDPState                 string
-	LocalUDPRecoveryMode          string
-	LocalUDPMapPressure           string
-	LocalUDPNetworkGeneration     uint32
+	LocalEnabled                 bool
+	LocalDataPlane               string
+	LocalCgroupAttachMode        string
+	LocalSelfBypassMode          string
+	LocalSelfBypassCleanupMode   string
+	LocalUDPCleanupMode          string
+	LocalUDPUserspaceCleanupMode string
+	LocalUDPStorageMode          string
+	LocalUDPTimeMode             string
+	LocalUDPState                string
+	LocalUDPRecoveryMode         string
+	LocalUDPMapPressure          string
+	LocalUDPNetworkGeneration    uint32
+	// LocalUDPReleaseObserver reports whether UDP socket releases are
+	// delivered to userspace as notifications. When they are not,
+	// LocalUDPReleaseFallbackReason names the step that fell back.
 	LocalUDPReleaseObserver       bool
 	LocalUDPReleaseFallbackReason string
 	LocalUDPReleaseProgram        string

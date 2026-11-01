@@ -1,14 +1,12 @@
 package local
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"net/netip"
 	"os"
 	"slices"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,28 +33,10 @@ import (
 	mDNS "github.com/miekg/dns"
 )
 
-func isSystemdResolvedManaged() bool {
-	resolvContent, err := os.Open("/etc/resolv.conf")
-	if err != nil {
-		return false
-	}
-	defer resolvContent.Close()
-	scanner := bufio.NewScanner(resolvContent)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || line[0] != '#' {
-			return false
-		}
-		if strings.Contains(line, "systemd-resolved") {
-			return true
-		}
-	}
-	return false
-}
-
 type DBusResolvedResolver struct {
 	ctx               context.Context
 	logger            logger.ContextLogger
+	networkManager    adapter.NetworkManager
 	interfaceFinder   control.InterfaceFinder
 	interfaceMonitor  tun.DefaultInterfaceMonitor
 	interfaceCallback *list.Element[tun.DefaultInterfaceUpdateCallback]
@@ -68,15 +48,17 @@ type DBusResolvedResolver struct {
 	updateCancel      context.CancelFunc
 	updateRunAccess   sync.Mutex
 	closed            bool
+	closeOnce         sync.Once
 	signalChan        chan *dbus.Signal
 }
 
 type resolvedServerSet struct {
+	specifications  []resolvedScopeSpecification
 	scopes          []*resolvedScope
 	serverAddresses []netip.Addr
 	signature       []string
-	serverScope     *adapter.Scope
 	fallbackErr     error
+	serverScope     *adapter.Scope
 }
 
 // Match levels of dns_scope_good_domain() in systemd-resolved: a routing or search
@@ -167,6 +149,7 @@ func NewResolvedResolver(ctx context.Context, logger logger.ContextLogger) (Reso
 	return &DBusResolvedResolver{
 		ctx:              ctx,
 		logger:           logger,
+		networkManager:   networkManager,
 		interfaceFinder:  networkManager.InterfaceFinder(),
 		interfaceMonitor: interfaceMonitor,
 		networkMonitor:   networkManager.NetworkMonitor(),
@@ -186,6 +169,7 @@ func (t *DBusResolvedResolver) Start() error {
 		dbus.WithMatchArg(0, "org.freedesktop.resolve1"),
 	).Err
 	if err != nil {
+		t.Close()
 		return E.Cause(err, "configure resolved restart listener")
 	}
 	err = t.systemBus.BusObject().AddMatchSignal(
@@ -195,6 +179,7 @@ func (t *DBusResolvedResolver) Start() error {
 		dbus.WithMatchArg(0, "org.freedesktop.resolve1.Manager"),
 	).Err
 	if err != nil {
+		t.Close()
 		return E.Cause(err, "configure resolved properties listener")
 	}
 	t.signalChan = make(chan *dbus.Signal, 16)
@@ -205,26 +190,30 @@ func (t *DBusResolvedResolver) Start() error {
 }
 
 func (t *DBusResolvedResolver) Close() error {
-	t.updateAccess.Lock()
-	updateCancel := t.updateCancel
-	t.updateCancel = nil
-	t.updateAccess.Unlock()
-	if updateCancel != nil {
-		updateCancel()
-	}
-	t.updateRunAccess.Lock()
-	t.closed = true
-	serverSet := t.savedServerSet.Swap(nil)
-	t.updateRunAccess.Unlock()
 	var closeErr error
-	if serverSet != nil {
-		closeErr = serverSet.serverScope.Close()
-	}
-	t.interfaceMonitor.UnregisterCallback(t.interfaceCallback)
-	if t.networkCallback != nil {
-		t.networkMonitor.UnregisterCallback(t.networkCallback)
-	}
-	_ = t.systemBus.Close()
+	t.closeOnce.Do(func() {
+		t.updateAccess.Lock()
+		updateCancel := t.updateCancel
+		t.updateCancel = nil
+		t.updateAccess.Unlock()
+		if updateCancel != nil {
+			updateCancel()
+		}
+		t.updateRunAccess.Lock()
+		t.closed = true
+		serverSet := t.savedServerSet.Swap(nil)
+		t.updateRunAccess.Unlock()
+		closeErr = serverSet.close()
+		if t.interfaceCallback != nil {
+			t.interfaceMonitor.UnregisterCallback(t.interfaceCallback)
+		}
+		if t.networkCallback != nil {
+			t.networkMonitor.UnregisterCallback(t.networkCallback)
+		}
+		if t.systemBus != nil {
+			_ = t.systemBus.Close()
+		}
+	})
 	return closeErr
 }
 
@@ -369,6 +358,15 @@ func acceptResolvedScopeResponse(response *mDNS.Msg, err error) bool {
 	return err == nil && response.Rcode == mDNS.RcodeSuccess
 }
 
+// close releases the transports of a server set. Fallback sets, which make
+// the transport use resolv.conf, own none.
+func (s *resolvedServerSet) close() error {
+	if s == nil || s.serverScope == nil {
+		return nil
+	}
+	return s.serverScope.Close()
+}
+
 func (s *resolvedServerSet) selectScopes(name string) []*resolvedScope {
 	var (
 		bestMatch      = resolvedScopeNoMatch
@@ -459,23 +457,24 @@ func (t *DBusResolvedResolver) updateStatus(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	serverSet, err := t.checkResolved(ctx)
+	scopeSpecifications, err := t.checkResolved(ctx)
 	if ctx.Err() != nil {
-		if serverSet != nil {
-			_ = serverSet.serverScope.Close()
-		}
 		return ctx.Err()
 	}
-	if isResolvedUnavailableError(err) {
-		serverSet = &resolvedServerSet{
-			fallbackErr: fmt.Errorf("%w: %w", errResolvedUnavailable, err),
-			serverScope: adapter.NewScope(t.ctx, t.logger),
+	var serverSet *resolvedServerSet
+	if err == nil {
+		currentServerSet := t.savedServerSet.Load()
+		if currentServerSet != nil && slices.EqualFunc(currentServerSet.specifications, scopeSpecifications, resolvedScopeSpecification.equal) {
+			return nil
 		}
+		serverSet, err = t.createResolvedServerSet(scopeSpecifications)
+	} else if isResolvedUnavailableError(err) {
+		serverSet = &resolvedServerSet{fallbackErr: fmt.Errorf("%w: %w", errResolvedUnavailable, err)}
 		err = nil
 	}
 	oldServerSet := t.savedServerSet.Swap(serverSet)
 	if oldServerSet != nil {
-		_ = oldServerSet.serverScope.Close()
+		_ = oldServerSet.close()
 	}
 	if serverSet != nil && serverSet.fallbackErr != nil {
 		if oldServerSet == nil || oldServerSet.fallbackErr == nil || oldServerSet.fallbackErr.Error() != serverSet.fallbackErr.Error() {
@@ -488,8 +487,9 @@ func (t *DBusResolvedResolver) updateStatus(ctx context.Context) error {
 		return err
 	}
 	if oldServerSet == nil || oldServerSet.fallbackErr != nil {
-		t.logger.Debug("using systemd-resolved service as resolver")
+		t.logger.Debug("systemd-resolved service is available")
 	}
+	t.networkManager.FlushSystemDNSCache()
 	return nil
 }
 
@@ -533,9 +533,9 @@ func checkResolvedFallback(ctx context.Context, servers []M.Socksaddr) error {
 	return nil
 }
 
-func (t *DBusResolvedResolver) checkResolved(ctx context.Context) (*resolvedServerSet, error) {
+func (t *DBusResolvedResolver) checkResolved(ctx context.Context) ([]resolvedScopeSpecification, error) {
 	managerObject := t.systemBus.Object("org.freedesktop.resolve1", "/org/freedesktop/resolve1")
-	err := managerObject.CallWithContext(ctx, "org.freedesktop.DBus.Peer.Ping", 0).Err
+	err := managerObject.CallWithContext(ctx, "org.freedesktop.DBus.Peer.Ping", dbus.FlagNoAutoStart).Err
 	if err != nil {
 		return nil, err
 	}
@@ -629,13 +629,27 @@ func (t *DBusResolvedResolver) checkResolved(ctx context.Context) (*resolvedServ
 	if len(scopeSpecifications) == 0 {
 		return nil, E.New("no DNS servers configured")
 	}
+	return scopeSpecifications, nil
+}
+
+func (s resolvedScopeSpecification) equal(other resolvedScopeSpecification) bool {
+	return s.interfaceName == other.interfaceName &&
+		s.dnsOverTLSMode == other.dnsOverTLSMode &&
+		slices.Equal(s.domains, other.domains) &&
+		s.defaultRoute == other.defaultRoute &&
+		s.fallback == other.fallback &&
+		slices.Equal(s.servers, other.servers)
+}
+
+func (t *DBusResolvedResolver) createResolvedServerSet(scopeSpecifications []resolvedScopeSpecification) (*resolvedServerSet, error) {
 	serverSet := &resolvedServerSet{
-		serverScope: adapter.NewScope(t.ctx, t.logger),
+		specifications: scopeSpecifications,
+		serverScope:    adapter.NewScope(t.ctx, t.logger),
 	}
 	for _, scopeSpecification := range scopeSpecifications {
 		scope, createErr := t.createResolvedScope(serverSet.serverScope, scopeSpecification)
 		if createErr != nil {
-			_ = serverSet.serverScope.Close()
+			_ = serverSet.close()
 			return nil, createErr
 		}
 		serverSet.scopes = append(serverSet.scopes, scope)
@@ -653,7 +667,7 @@ func (t *DBusResolvedResolver) loadResolvedLinkScope(ctx context.Context, manage
 		return resolvedScopeSpecification{}, false, nil
 	}
 	var linkPath dbus.ObjectPath
-	err = managerObject.CallWithContext(ctx, "org.freedesktop.resolve1.Manager.GetLink", 0, interfaceIndex).Store(&linkPath)
+	err = managerObject.CallWithContext(ctx, "org.freedesktop.resolve1.Manager.GetLink", dbus.FlagNoAutoStart, interfaceIndex).Store(&linkPath)
 	if err != nil {
 		return resolvedScopeSpecification{}, false, err
 	}
@@ -801,7 +815,7 @@ func resolvedServerPort(port uint16, useTLS bool) uint16 {
 
 func loadResolvedProperties(ctx context.Context, object dbus.BusObject, interfaceName string) (map[string]dbus.Variant, error) {
 	var properties map[string]dbus.Variant
-	err := object.CallWithContext(ctx, "org.freedesktop.DBus.Properties.GetAll", 0, interfaceName).Store(&properties)
+	err := object.CallWithContext(ctx, "org.freedesktop.DBus.Properties.GetAll", dbus.FlagNoAutoStart, interfaceName).Store(&properties)
 	if err != nil {
 		return nil, E.Cause(err, "load ", interfaceName, " properties")
 	}

@@ -83,6 +83,43 @@
     启用[实验性可观测性](observability.md)后，专用的 `/observability/v1`
     HTTP API 会挂载到该 Controller，并使用相同的 `secret` 保护。
 
+!!! info "规则命中统计"
+
+    `GET /rules` 依次列出路由规则与 DNS 规则。`type` 使用 mihomo 规则类型
+    （`DomainSuffix`、`IPCIDR`、`RuleSet`、`InName`、`DstPort` 等；`ip_is_private`
+    显示为 `GeoIP` `lan`，mihomo 中没有对应类型的条件使用字段名的驼峰形式，如
+    `ClashMode`），`payload` 列出条件的值，以 `, ` 分隔，如 `DomainSuffix`
+    `google.com, youtube.com`。
+
+    含多个条件的规则类型为 `AND`、`OR` 或 `NOT`，载荷为以 `&`（且）、`|`（或）连接的
+    `类型(值)` 表达式，嵌套的组加括号，如 `AND`
+    `Network(tcp) & (DomainSuffix(a.com) | IPCIDR(1.1.1.1/32))`。嵌套的 `AND` /
+    `OR`（含逻辑规则）展开到同一层，`OR` 中同类型条件的值合并，因此 `OR` 只并列
+    不同类型的条件。没有条件的规则为 `Match`。
+
+    `proxy` 为目标出站或 DNS 服务器的标签，其余动作为大写的动作名（`REJECT`、
+    `REJECT-DROP`、`SNIFF`、`HIJACK-DNS` 等）。`/connections` 的 `rule` 与
+    `rulePayload` 使用同样的格式，连接落到 `route.final` 时为 `Match`。
+
+    与 mihomo 一致，每条规则返回 `index`、`size` 与 `extra`（`disabled`、`hitCount`、
+    `hitAt`、`missCount`、`missAt`）：顶层规则每参与一次匹配计一次命中或未命中，
+    被禁用的规则跳过不计。统计保存在内存中，重启或重载配置后清零。
+
+    `PATCH /rules/disable` 接受 `{"<index>": true|false}`，按 `index` 禁用或启用规则；
+    `PUT /rules/{uuid}` 仍可按 `uuid` 切换规则状态。
+
+!!! info "TCP 并发拨号"
+
+    与 mihomo 一致，`GET /configs` 返回 `tcp-concurrent`，`PATCH /configs` 的 `tcp-concurrent` 在运行时开关
+    [`dns.tcp_concurrent`](/zh/configuration/dns/#tcp_concurrent)。该开关不会持久化，设置了自身
+    `tcp_concurrent` 的拨号器不受其影响。
+
+    `GET /dns/tcp-concurrent` 返回 `enabled`、`adaptive`（未设置 `attempt_delay`）、`attemptDelay`（毫秒）、
+    `maxConcurrent`，统计数据 `statistics`（`races`、`raceFailures`、`historyHits`、`attempts`、`failures`、
+    `canceled`、`lateClosed`、按胜出尝试序号计数的 `wins`、平均连接耗时 `averageConnectTime`（毫秒）），
+    记住的目标 `destinations`（`host`、`port`、`address`、平滑连接耗时 `connectTime`（毫秒）、`expiresAt`）
+    与失败地址 `failures`（`address`、`expiresAt`）。`DELETE /dns/tcp-concurrent` 清空连接历史并保留统计数据。
+
 ### Fields
 
 #### external_controller
@@ -107,16 +144,7 @@ RESTful web API 监听地址。如果为空，则禁用 Clash API。
 
 参阅 [HTTP 客户端字段](/zh/configuration/shared/http-client/) 了解详情。
 
-留空时使用默认 HTTP 客户端：即由 [`route.default_http_client`](/zh/configuration/route/#default_http_client)
-指定的客户端，或未指定默认标签时使用顶层 `http_clients` 的第一项。
-
-启用面板下载时，即使已有面板文件，也会在启动时校验客户端配置。
-此字段不能与 `external_ui_download_detour` 同时配置。
-
-!!! failure "隐式默认已在 sing-box 1.14.0 废弃"
-
-    如果既未配置客户端，也未配置旧下载 detour，将回退到通过默认出站连接的隐式 HTTP 客户端。
-    此回退已在 sing-box 1.14.0 废弃，将在 sing-box 1.16.0 移除。请定义 `http_clients` 或显式配置此字段。
+如果为空，将使用默认传输。
 
 #### external_ui_download_detour
 

@@ -7,11 +7,15 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sagernet/sing-box/common/dialer"
+	"github.com/sagernet/sing-box/common/ptls"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
@@ -20,6 +24,7 @@ import (
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/ntp"
 
+	"github.com/cloudflare/circl/sign/mldsa/mldsa65"
 	utls "github.com/metacubex/utls"
 )
 
@@ -29,6 +34,7 @@ type RealityServerConfig struct {
 	config           *utls.RealityConfig
 	handshakeTimeout time.Duration
 	rejectUnknownSNI bool
+	logger           log.ContextLogger
 }
 
 func NewRealityServer(ctx context.Context, logger log.ContextLogger, options option.InboundTLSOptions) (ServerConfig, error) {
@@ -113,20 +119,39 @@ func NewRealityServer(ctx context.Context, logger log.ContextLogger, options opt
 		return nil, E.New("invalid private key")
 	}
 	tlsConfig.PrivateKey = privateKey
-	tlsConfig.MaxTimeDiff = time.Duration(options.Reality.MaxTimeDifference)
+
+	switch options.Reality.KeyShare {
+	case C.RealityKeyShareDefault, C.RealityKeyShareHybrid:
+	case C.RealityKeyShareClassical:
+		tlsConfig.ClassicalKeyShare = true
+	default:
+		return nil, E.New("unknown reality key_share: ", options.Reality.KeyShare, " (expected \"hybrid\" or \"classical\")")
+	}
+
+	if options.Reality.MaxTimeDifference > 0 {
+		tlsConfig.MaxTimeDiff = options.Reality.MaxTimeDifference.Build()
+	}
+
+	if options.Reality.MLDSA65Seed != "" {
+		mldsa65Key, err := parseRealityMldsa65Seed(options.Reality.MLDSA65Seed)
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig.Mldsa65Key = mldsa65Key
+	}
 
 	tlsConfig.ShortIds = make(map[[8]byte]bool)
 	if len(options.Reality.ShortID) == 0 {
 		tlsConfig.ShortIds[[8]byte{0}] = true
 	} else {
 		for i, shortIDString := range options.Reality.ShortID {
+			if len(shortIDString) > 16 || len(shortIDString)%2 != 0 {
+				return nil, E.New("invalid short_id[", i, "]: ", shortIDString)
+			}
 			var shortID [8]byte
-			decodedLen, err := hex.Decode(shortID[:], []byte(shortIDString))
+			_, err := hex.Decode(shortID[:], []byte(shortIDString))
 			if err != nil {
 				return nil, E.Cause(err, "decode short_id[", i, "]: ", shortIDString)
-			}
-			if decodedLen > 8 {
-				return nil, E.New("invalid short_id[", i, "]: ", shortIDString)
 			}
 			tlsConfig.ShortIds[shortID] = true
 		}
@@ -138,6 +163,14 @@ func NewRealityServer(ctx context.Context, logger log.ContextLogger, options opt
 	}
 	tlsConfig.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 		return handshakeDialer.DialContext(ctx, network, M.ParseSocksaddr(addr))
+	}
+
+	if options.Reality.Fallback != nil && options.Reality.Fallback.IsEnabled() {
+		fallbackOptions, err := newRealityFallbackOptions(options.Reality.Fallback)
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig.Fallback = fallbackOptions
 	}
 
 	if options.ECH != nil && options.ECH.Enabled {
@@ -153,6 +186,7 @@ func NewRealityServer(ctx context.Context, logger log.ContextLogger, options opt
 		config:           &tlsConfig,
 		handshakeTimeout: handshakeTimeout,
 		rejectUnknownSNI: options.RejectUnknownSNI,
+		logger:           logger,
 	}
 	if options.KernelTx || options.KernelRx {
 		if !C.IsLinux {
@@ -201,6 +235,7 @@ func (c *RealityServerConfig) Client(conn net.Conn) (Conn, error) {
 }
 
 func (c *RealityServerConfig) Start() error {
+	utls.DetectPostHandshakeRecordsLens(c.config)
 	return nil
 }
 
@@ -215,6 +250,12 @@ func (c *RealityServerConfig) Server(conn net.Conn) (Conn, error) {
 func (c *RealityServerConfig) ServerHandshake(ctx context.Context, conn net.Conn) (Conn, error) {
 	tlsConn, err := utls.RealityServer(ctx, conn, c.config)
 	if err != nil {
+		if errors.Is(err, utls.ErrFallbackHandled) {
+			if c.logger != nil {
+				c.logger.DebugContext(ctx, "reality fallback completed")
+			}
+			return nil, net.ErrClosed
+		}
 		return nil, err
 	}
 	if c.rejectUnknownSNI {
@@ -237,6 +278,7 @@ func (c *RealityServerConfig) Clone() Config {
 		config:           c.config.Clone(),
 		handshakeTimeout: c.handshakeTimeout,
 		rejectUnknownSNI: c.rejectUnknownSNI,
+		logger:           c.logger,
 	}
 }
 
@@ -281,4 +323,101 @@ func (c *realityConnWrapper) ReaderReplaceable() bool {
 
 func (c *realityConnWrapper) WriterReplaceable() bool {
 	return false
+}
+
+// parseRealityMldsa65Seed 解析 mldsa65_seed：32 字节种子（与 xray mldsa65 输出一致）或
+// 4032 字节完整私钥，接受 base64（标准 / URL）与 hex。
+func parseRealityMldsa65Seed(seed string) (*mldsa65.PrivateKey, error) {
+	keyStr := strings.TrimSpace(seed)
+	var rawKey []byte
+	if len(keyStr) == 2*mldsa65.SeedSize || len(keyStr) == 2*mldsa65.PrivateKeySize {
+		rawKey, _ = hex.DecodeString(keyStr)
+	}
+	if len(rawKey) != mldsa65.SeedSize && len(rawKey) != mldsa65.PrivateKeySize {
+		unpadded := strings.TrimRight(keyStr, "=")
+		var err error
+		rawKey, err = base64.RawURLEncoding.DecodeString(unpadded)
+		if err != nil {
+			rawKey, err = base64.RawStdEncoding.DecodeString(unpadded)
+			if err != nil {
+				return nil, E.Cause(err, "decode mldsa65_seed")
+			}
+		}
+	}
+	switch len(rawKey) {
+	case mldsa65.SeedSize:
+		_, privateKey := mldsa65.NewKeyFromSeed((*[mldsa65.SeedSize]byte)(rawKey))
+		return privateKey, nil
+	case mldsa65.PrivateKeySize:
+		privateKey := new(mldsa65.PrivateKey)
+		err := privateKey.UnmarshalBinary(rawKey)
+		if err != nil {
+			return nil, E.Cause(err, "parse mldsa65_seed")
+		}
+		return privateKey, nil
+	default:
+		return nil, E.New("invalid mldsa65_seed length: expected ", mldsa65.SeedSize, " (seed) or ", mldsa65.PrivateKeySize, " bytes, got ", len(rawKey))
+	}
+}
+
+// newRealityFallbackOptions 解析 reality.fallback：server 为空时复用伪装目标，可为 UDS 路径；
+// qos 为每个方向的带宽上限（默认 20kb/s）；max_conn 为每秒允许回落的新连接数（默认 10，
+// 支持 "10"、"10/s"、"600/m"、"3600/h"）；timeout 为回落链路的空闲超时（默认 30s）。
+func newRealityFallbackOptions(options *option.InboundRealityFallbackOptions) (*utls.RealityFallbackOptions, error) {
+	isUnixSocket := strings.HasPrefix(options.Server, "/") || strings.HasPrefix(options.Server, "unix:")
+	if options.Server != "" && !isUnixSocket && options.ServerPort == 0 {
+		return nil, E.New("reality fallback: server_port is required when server is specified")
+	}
+	idleTimeout := options.Timeout.Build()
+	if idleTimeout <= 0 {
+		idleTimeout = 30 * time.Second
+	}
+	qos := options.QOS
+	if qos == "" {
+		qos = "20kb/s"
+	}
+	bytesPerSec, err := ptls.ParseBandwidth(qos)
+	if err != nil {
+		return nil, E.Cause(err, "reality fallback: parse qos")
+	}
+	maxConnections := options.MaxConnections
+	if maxConnections == "" {
+		maxConnections = "10"
+	}
+	connectionsPerSec, err := parseRealityFallbackRate(maxConnections)
+	if err != nil {
+		return nil, E.Cause(err, "reality fallback: parse max_conn")
+	}
+	return &utls.RealityFallbackOptions{
+		Server:            options.Server,
+		ServerPort:        options.ServerPort,
+		IdleTimeout:       idleTimeout,
+		BytesPerSec:       uint64(bytesPerSec),
+		ConnectionsPerSec: connectionsPerSec,
+	}, nil
+}
+
+func parseRealityFallbackRate(rate string) (float64, error) {
+	rate = strings.TrimSpace(strings.ToLower(rate))
+	interval := 1.0
+	if count, unit, found := strings.Cut(rate, "/"); found {
+		rate = strings.TrimSpace(count)
+		switch strings.TrimSpace(unit) {
+		case "s", "sec", "second":
+		case "m", "min", "minute":
+			interval = 60
+		case "h", "hour":
+			interval = 3600
+		default:
+			return 0, E.New("unknown rate unit: ", unit)
+		}
+	}
+	count, err := strconv.ParseFloat(rate, 64)
+	if err != nil {
+		return 0, err
+	}
+	if count < 0 {
+		return 0, E.New("negative rate: ", rate)
+	}
+	return count / interval, nil
 }

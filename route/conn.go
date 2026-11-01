@@ -2,11 +2,11 @@ package route
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net"
 	"net/netip"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -18,8 +18,8 @@ import (
 	"github.com/sagernet/sing-box/common/sniff"
 	"github.com/sagernet/sing-box/common/tlsfragment"
 	"github.com/sagernet/sing-box/common/tlsspoof"
+	"github.com/sagernet/sing-box/common/urltest"
 	C "github.com/sagernet/sing-box/constant"
-	snell "github.com/sagernet/sing-snell"
 	"github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/buf"
@@ -30,19 +30,43 @@ import (
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/x/list"
+	"github.com/sagernet/sing/service"
 )
 
 var _ adapter.ConnectionManager = (*ConnectionManager)(nil)
 
-type ConnectionManager struct {
-	logger      logger.ContextLogger
-	access      sync.Mutex
-	connections list.List[io.Closer]
+// joinDestinationAddresses 将目的地址切片格式化为 "[a,b,c]" 形式。
+// 相比 strings.Join(common.Map(addrs, netip.Addr.String), ",") 省去一次
+// 中间 []string 分配 + strings.Join 内部拼接缓冲，错误路径分配量显著降低。
+func joinDestinationAddresses(addrs []netip.Addr) string {
+	if len(addrs) == 0 {
+		return "[]"
+	}
+	var sb strings.Builder
+	// IPv4 ~15 字符、IPv6 ~40 字符，平均 20 足够，再加 "[]" 与分隔符
+	sb.Grow(len(addrs)*22 + 2)
+	sb.WriteByte('[')
+	for i, a := range addrs {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteString(a.String())
+	}
+	sb.WriteByte(']')
+	return sb.String()
 }
 
-func NewConnectionManager(logger logger.ContextLogger) *ConnectionManager {
+type ConnectionManager struct {
+	logger         logger.ContextLogger
+	urlTestHistory *urltest.HistoryStorage
+	access         sync.Mutex
+	connections    list.List[io.Closer]
+}
+
+func NewConnectionManager(ctx context.Context, logger logger.ContextLogger) *ConnectionManager {
 	return &ConnectionManager{
-		logger: logger,
+		logger:         logger,
+		urlTestHistory: service.PtrFromContext[urltest.HistoryStorage](ctx),
 	}
 }
 
@@ -63,6 +87,22 @@ func (m *ConnectionManager) Count() int {
 	return m.connections.Len()
 }
 
+// CloseAll evicts every tracked connection and asks each to Close
+// asynchronously. Callers no longer block on the per-conn close
+// cost — critical on a network switch where N × Close() recurses
+// into Smart.recordStats + bbolt writes + QUIC session teardown,
+// serialised under this function's scope. For a busy config that
+// can mean thousands of close()s in a tight loop, pegging CPU and
+// holding the caller (ResetNetwork) for seconds.
+//
+// Semantics preserved: we still remove every tracked entry under
+// the list lock before returning (so a subsequent TrackConn
+// observes the list as empty). What changes is that the actual
+// Close() of each evicted closer happens on a separate goroutine.
+// If the caller needs synchronous completion, that contract was
+// never advertised — Close() can take arbitrary time per conn,
+// and no existing caller inspects post-return state beyond the
+// fact that the tracker emptied.
 func (m *ConnectionManager) CloseAll() {
 	m.access.Lock()
 	var closers []io.Closer
@@ -73,9 +113,18 @@ func (m *ConnectionManager) CloseAll() {
 		element = nextElement
 	}
 	m.access.Unlock()
-	for _, closer := range closers {
-		common.Close(closer)
+	if len(closers) == 0 {
+		return
 	}
+	// Fire-and-forget: one dedicated goroutine serialises the
+	// closes (preserves original per-close ordering) so we don't
+	// spawn N goroutines for N conns under a network-switch
+	// storm. The caller returns the moment the tracker is empty.
+	go func() {
+		for _, closer := range closers {
+			common.Close(closer)
+		}
+	}()
 }
 
 func (m *ConnectionManager) TrackConn(conn net.Conn) net.Conn {
@@ -103,9 +152,13 @@ func (m *ConnectionManager) TrackPacketConn(conn net.PacketConn) net.PacketConn 
 }
 
 func notifyConnectionFailure(ctx context.Context, chain []adapter.Outbound) {
-	for _, outbound := range chain {
+	for i, outbound := range chain {
 		if listener, ok := outbound.(adapter.ConnectionFailureListener); ok {
-			listener.OnConnectionFailure(ctx)
+			var member adapter.Outbound
+			if i+1 < len(chain) {
+				member = chain[i+1]
+			}
+			listener.OnConnectionFailure(ctx, member)
 		}
 	}
 }
@@ -124,7 +177,7 @@ func (m *ConnectionManager) NewConnection(ctx context.Context, this N.Dialer, co
 	if err != nil {
 		var remoteString string
 		if len(metadata.DestinationAddresses) > 0 {
-			remoteString = "[" + strings.Join(common.Map(metadata.DestinationAddresses, netip.Addr.String), ",") + "]"
+			remoteString = joinDestinationAddresses(metadata.DestinationAddresses)
 		} else {
 			remoteString = metadata.Destination.String()
 		}
@@ -134,6 +187,7 @@ func (m *ConnectionManager) NewConnection(ctx context.Context, this N.Dialer, co
 		}
 		notifyConnectionFailure(ctx, metadata.OutboundChain)
 		err = E.Cause(err, "open connection to ", remoteString, dialerString)
+		m.deleteURLTestHistory(metadata.OutboundChain)
 		N.CloseOnHandshakeFailure(conn, onClose, err)
 		m.logger.ErrorContext(ctx, err)
 		return
@@ -213,7 +267,7 @@ func (m *ConnectionManager) NewPacketConnection(ctx context.Context, this N.Dial
 		if err != nil {
 			var remoteString string
 			if len(metadata.DestinationAddresses) > 0 {
-				remoteString = "[" + strings.Join(common.Map(metadata.DestinationAddresses, netip.Addr.String), ",") + "]"
+				remoteString = joinDestinationAddresses(metadata.DestinationAddresses)
 			} else {
 				remoteString = metadata.Destination.String()
 			}
@@ -223,6 +277,7 @@ func (m *ConnectionManager) NewPacketConnection(ctx context.Context, this N.Dial
 			}
 			notifyConnectionFailure(ctx, metadata.OutboundChain)
 			err = E.Cause(err, "open packet connection to ", remoteString, dialerString)
+			m.deleteURLTestHistory(metadata.OutboundChain)
 			N.CloseOnHandshakeFailure(conn, onClose, err)
 			m.logger.ErrorContext(ctx, err)
 			return
@@ -247,6 +302,7 @@ func (m *ConnectionManager) NewPacketConnection(ctx context.Context, this N.Dial
 			}
 			notifyConnectionFailure(ctx, metadata.OutboundChain)
 			err = E.Cause(err, "listen packet connection", dialerString)
+			m.deleteURLTestHistory(metadata.OutboundChain)
 			N.CloseOnHandshakeFailure(conn, onClose, err)
 			m.logger.ErrorContext(ctx, err)
 			return
@@ -254,12 +310,10 @@ func (m *ConnectionManager) NewPacketConnection(ctx context.Context, this N.Dial
 	}
 	err = N.ReportPacketConnHandshakeSuccess(conn, remotePacketConn)
 	if err != nil {
-		conn.Close()
+		err = E.Cause(err, "report handshake success")
 		remotePacketConn.Close()
-		if onClose != nil {
-			onClose(err)
-		}
-		m.logger.ErrorContext(ctx, "report handshake success: ", err)
+		N.CloseOnHandshakeFailure(conn, onClose, err)
+		m.logger.ErrorContext(ctx, err)
 		return
 	}
 	udpTimeout := packetTimeout(&metadata)
@@ -307,6 +361,24 @@ func (m *ConnectionManager) NewPacketConnection(ctx context.Context, this N.Dial
 	go m.packetConnectionCopy(ctx, destination, conn, true, &done, onClose)
 }
 
+func (m *ConnectionManager) deleteURLTestHistory(chain []adapter.Outbound) {
+	// A dialing group ends the chain: it fails over between its members within
+	// the dial and counts member failures itself, so a failure here means every
+	// member failed, which points at the destination rather than a member.
+	if m.urlTestHistory == nil || len(chain) == 0 {
+		return
+	}
+	if _, isDialingGroup := chain[len(chain)-1].(adapter.DialingOutboundGroup); isDialingGroup {
+		return
+	}
+	if slices.ContainsFunc(chain, func(it adapter.Outbound) bool {
+		_, isURLTestGroup := it.(adapter.URLTestGroup)
+		return isURLTestGroup
+	}) {
+		m.urlTestHistory.DeleteURLTestHistory(chain[len(chain)-1].Tag())
+	}
+}
+
 func (m *ConnectionManager) connectionCopy(ctx context.Context, source net.Conn, destination net.Conn, direction bool, done *atomic.Bool, onClose N.CloseHandlerFunc) {
 	_, err := bufio.CopyWithIncreateBuffer(destination, source, bufio.DefaultIncreaseBufferAfter, bufio.DefaultBatchSize)
 	if err != nil {
@@ -332,9 +404,7 @@ func (m *ConnectionManager) connectionCopy(ctx context.Context, source net.Conn,
 	if !direction {
 		if err == nil {
 			m.logger.DebugContext(ctx, "connection upload finished")
-		} else if isSnellRemoteEOF(err) {
-			m.logger.DebugContext(ctx, "connection upload closed: ", err)
-		} else if !E.IsClosedOrCanceled(err) {
+		} else if !isBenignConnClose(err) {
 			m.logger.ErrorContext(ctx, "connection upload closed: ", err)
 		} else {
 			m.logger.TraceContext(ctx, "connection upload closed")
@@ -342,9 +412,7 @@ func (m *ConnectionManager) connectionCopy(ctx context.Context, source net.Conn,
 	} else {
 		if err == nil {
 			m.logger.DebugContext(ctx, "connection download finished")
-		} else if isSnellRemoteEOF(err) {
-			m.logger.DebugContext(ctx, "connection download closed: ", err)
-		} else if !E.IsClosedOrCanceled(err) {
+		} else if !isBenignConnClose(err) {
 			m.logger.ErrorContext(ctx, "connection download closed: ", err)
 		} else {
 			m.logger.TraceContext(ctx, "connection download closed")
@@ -352,16 +420,19 @@ func (m *ConnectionManager) connectionCopy(ctx context.Context, source net.Conn,
 	}
 }
 
-func isSnellRemoteEOF(err error) bool {
-	// Follow single-error wrappers only. A joined error may contain another
-	// failure that must retain its normal log level.
-	for err != nil {
-		if response, ok := err.(*snell.ServerResponseError); ok {
-			return response.IsRemoteEOF()
-		}
-		err = errors.Unwrap(err)
+// isBenignConnClose treats peer EOF/reset and a locally canceled stream (a
+// multiplexed QUIC/TLS stream torn down after the other direction finished) as
+// a normal close instead of a connection error.
+func isBenignConnClose(err error) bool {
+	if err == nil || E.IsClosedOrCanceled(err) {
+		return true
 	}
-	return false
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "canceled by local") ||
+		strings.Contains(message, "cancelled by local") ||
+		strings.Contains(message, "stream canceled") ||
+		strings.Contains(message, "stream cancelled") ||
+		strings.Contains(message, "close called for canceled stream")
 }
 
 func (m *ConnectionManager) kickWriteHandshake(ctx context.Context, source net.Conn, destination net.Conn, serverFirst bool, direction bool, done *atomic.Bool, onClose N.CloseHandlerFunc) bool {

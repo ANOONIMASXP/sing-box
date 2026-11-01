@@ -63,9 +63,10 @@ type ProviderLocalOptions struct {
 	Path        string                     `json:"path"`
 	HealthCheck ProviderHealthCheckOptions `json:"health_check,omitempty"`
 
-	OverrideDialer *OverrideDialerOptions `json:"override_dialer,omitempty"`
-	OverrideTLS    *OverrideTLSOptions    `json:"override_tls,omitempty"`
-	OverrideAnyTLS *OverrideAnyTLSOptions `json:"override_anytls,omitempty"`
+	OverrideDialer    *OverrideDialerOptions    `json:"override_dialer,omitempty"`
+	OverrideTLS       *OverrideTLSOptions       `json:"override_tls,omitempty"`
+	OverrideAnyTLS    *OverrideAnyTLSOptions    `json:"override_anytls,omitempty"`
+	OverrideTransport *OverrideTransportOptions `json:"override_transport,omitempty"`
 }
 
 type ProviderRemoteOptions struct {
@@ -80,9 +81,10 @@ type ProviderRemoteOptions struct {
 	Include     *badoption.Regexp          `json:"include,omitempty"`
 	HealthCheck ProviderHealthCheckOptions `json:"health_check,omitempty"`
 
-	OverrideDialer *OverrideDialerOptions `json:"override_dialer,omitempty"`
-	OverrideTLS    *OverrideTLSOptions    `json:"override_tls,omitempty"`
-	OverrideAnyTLS *OverrideAnyTLSOptions `json:"override_anytls,omitempty"`
+	OverrideDialer    *OverrideDialerOptions    `json:"override_dialer,omitempty"`
+	OverrideTLS       *OverrideTLSOptions       `json:"override_tls,omitempty"`
+	OverrideAnyTLS    *OverrideAnyTLSOptions    `json:"override_anytls,omitempty"`
+	OverrideTransport *OverrideTransportOptions `json:"override_transport,omitempty"`
 
 	// Deprecated: use http_client instead
 	DownloadDetour string `json:"download_detour,omitempty" reference:"outbound" schema:"omit"`
@@ -143,15 +145,34 @@ type ProviderInlineOptions struct {
 }
 
 type ProviderHealthCheckOptions struct {
-	Enabled  bool               `json:"enabled,omitempty"`
-	URL      string             `json:"url,omitempty"`
-	Interval badoption.Duration `json:"interval,omitempty"`
-	Timeout  badoption.Duration `json:"timeout,omitempty"`
+	Enabled  bool                           `json:"enabled,omitempty"`
+	URL      string                         `json:"url,omitempty"`
+	Interval badoption.Duration             `json:"interval,omitempty"`
+	Timeout  badoption.Duration             `json:"timeout,omitempty"`
+	UDP      *ProviderUDPHealthCheckOptions `json:"udp,omitempty"`
+}
+
+// ProviderUDPHealthCheckOptions probes the real UDP support of provider nodes
+// by sending a DNS query over UDP through each of them.
+type ProviderUDPHealthCheckOptions struct {
+	Enabled bool `json:"enabled,omitempty"`
+	// DNS server queried through the node, host:port.
+	Server  string             `json:"server,omitempty"`
+	Domain  string             `json:"domain,omitempty"`
+	Timeout badoption.Duration `json:"timeout,omitempty"`
+	// How long a result counts; afterwards the node is unknown again.
+	TTL badoption.Duration `json:"ttl,omitempty"`
 }
 
 type OverrideAnyTLSOptions struct {
-	ClientMetadata *string `json:"client_metadata,omitempty"`
-	DisableReuse   *bool   `json:"disable_reuse,omitempty"`
+	UseAnyX               *bool                       `json:"use_anyx,omitempty"`
+	ClientMetadata        *string                     `json:"client_metadata,omitempty"`
+	DisableReuse          *bool                       `json:"disable_reuse,omitempty"`
+	PaddingScheme         *badoption.Listable[string] `json:"padding_scheme,omitempty"`
+	PaddingSchemeInterval *badoption.Duration         `json:"padding_scheme_interval,omitempty"`
+	MinIdleSession        *int                        `json:"min_idle_session,omitempty"`
+	IdleSessionTimeout    *badoption.Duration         `json:"idle_session_timeout,omitempty"`
+	IdleSessionMinTimeout *badoption.Duration         `json:"idle_session_min_timeout,omitempty"`
 }
 
 type OverrideDialerOptions struct {
@@ -212,9 +233,10 @@ type OverrideTLSOptions struct {
 }
 
 type OverrideECHOptions struct {
-	Enabled    *bool                       `json:"enabled,omitempty"`
-	Config     *badoption.Listable[string] `json:"config,omitempty"`
-	ConfigPath *string                     `json:"config_path,omitempty"`
+	Enabled         *bool                       `json:"enabled,omitempty"`
+	Config          *badoption.Listable[string] `json:"config,omitempty"`
+	ConfigPath      *string                     `json:"config_path,omitempty"`
+	QueryServerName *string                     `json:"query_server_name,omitempty"`
 
 	// Deprecated: not supported by stdlib
 	PQSignatureSchemesEnabled *bool `json:"pq_signature_schemes_enabled,omitempty"`
@@ -231,4 +253,11 @@ type OverrideRealityOptions struct {
 	Enabled   *bool   `json:"enabled,omitempty"`
 	PublicKey *string `json:"public_key,omitempty"`
 	ShortID   *string `json:"short_id,omitempty"`
+	KeyShare  *string `json:"key_share,omitempty"`
+	Version   *string `json:"version,omitempty"`
+}
+
+type OverrideTransportOptions struct {
+	XHTTPDownloadEnabled *bool   `json:"xhttp_download_enabled,omitempty"`
+	XHTTPDownloadDetour  *string `json:"xhttp_download_detour,omitempty" reference:"outbound"`
 }

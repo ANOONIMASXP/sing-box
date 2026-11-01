@@ -29,7 +29,10 @@ func RegisterProviderInline(registry *provider.Registry) {
 	provider.Register[option.ProviderInlineOptions](registry, C.ProviderTypeInline, NewProviderInline)
 }
 
-var _ adapter.Provider = (*ProviderLocal)(nil)
+var (
+	_ adapter.Provider        = (*ProviderLocal)(nil)
+	_ adapter.ProviderUpdater = (*ProviderLocal)(nil)
+)
 
 type ProviderLocal struct {
 	provider.Adapter
@@ -42,11 +45,11 @@ type ProviderLocal struct {
 	lastEPOpts  []option.Endpoint
 	lastUpdated time.Time
 	watcher     *fswatch.Watcher
-	closed      bool
 
-	overrideDialer *option.OverrideDialerOptions
-	overrideTLS    *option.OverrideTLSOptions
-	overrideAnyTLS *option.OverrideAnyTLSOptions
+	overrideDialer    *option.OverrideDialerOptions
+	overrideTLS       *option.OverrideTLSOptions
+	overrideAnyTLS    *option.OverrideAnyTLSOptions
+	overrideTransport *option.OverrideTransportOptions
 }
 
 func NewProviderInline(ctx context.Context, router adapter.Router, logFactory log.Factory, tag string, options option.ProviderInlineOptions) (adapter.Provider, error) {
@@ -60,12 +63,11 @@ func NewProviderInline(ctx context.Context, router adapter.Router, logFactory lo
 		ctx:     ctx,
 		logger:  logger,
 	}
-	provider.RewriteDetourForProvider(options.Outbounds, options.Endpoints)
+	provider.RewriteDetourForProvider(options.Outbounds)
+	provider.UpdateOutbounds(nil, options.Outbounds)
 	if len(options.Endpoints) > 0 {
-		provider.RewriteDetourForProviderEndpoints(options.Endpoints, options.Outbounds)
-	}
-	if err := provider.UpdateNodes(options.Outbounds, options.Endpoints); err != nil {
-		return nil, err
+		provider.RewriteDetourForProviderEndpoints(options.Endpoints)
+		provider.UpdateEndpoints(nil, options.Endpoints)
 	}
 	return provider, nil
 }
@@ -85,19 +87,31 @@ func NewProviderLocal(ctx context.Context, router adapter.Router, logFactory log
 		logger:   logger,
 		provider: service.FromContext[adapter.ProviderManager](ctx),
 
-		overrideDialer: options.OverrideDialer,
-		overrideTLS:    options.OverrideTLS,
-		overrideAnyTLS: options.OverrideAnyTLS,
+		overrideDialer:    options.OverrideDialer,
+		overrideTLS:       options.OverrideTLS,
+		overrideAnyTLS:    options.OverrideAnyTLS,
+		overrideTransport: options.OverrideTransport,
 	}
 	filePath := filemanager.BasePath(ctx, options.Path)
-	provider.path, _ = filepath.Abs(filePath)
+	absPath, _ := filepath.Abs(filePath)
+	provider.path = absPath
+
+	dir := filepath.Dir(absPath)
+	targetFile := filepath.Base(absPath)
+
 	watcher, err := fswatch.NewWatcher(fswatch.Options{
-		Path: []string{filePath},
-		Callback: func(path string) {
-			uErr := provider.reloadFile(path)
-			if uErr != nil {
-				logger.Error(E.Cause(uErr, "reload provider ", tag))
+		Path: []string{absPath, dir},
+		Callback: func(eventPath string) {
+			if filepath.Base(eventPath) == targetFile || eventPath == absPath {
+				uErr := provider.reloadFile(absPath)
+				if uErr != nil {
+					logger.Error(E.Cause(uErr, "reload provider ", tag))
+				} else {
+					logger.Info("reloaded local provider ", tag)
+				}
+				provider.UpdateGroups()
 			}
+			provider.UpdateGroups()
 		},
 	})
 	if err != nil {
@@ -108,20 +122,33 @@ func NewProviderLocal(ctx context.Context, router adapter.Router, logFactory log
 }
 
 func (s *ProviderLocal) StartContext(ctx context.Context, startContext *adapter.HTTPStartContext) error {
-	if err := s.Adapter.Start(); err != nil {
-		return err
-	}
-	if s.path != "" {
+	if s.path == "" {
+		// Inline outbounds are created in the constructor, before any group
+		// has registered its callback, so groups must be told about them here.
+		s.UpdateGroups()
+	} else {
 		err := s.reloadFile(s.path)
 		if err != nil {
 			return err
 		}
+		s.UpdateGroups()
 		if s.watcher != nil {
 			err := s.watcher.Start()
 			if err != nil {
 				s.logger.Error(E.Cause(err, "watch provider file"))
 			}
 		}
+	}
+	return s.Adapter.Start()
+}
+
+func (s *ProviderLocal) Update() error {
+	if s.path == "" {
+		return nil
+	}
+	err := s.reloadFile(s.path)
+	if err != nil {
+		return err
 	}
 	s.UpdateGroups()
 	return nil
@@ -136,9 +163,6 @@ func (s *ProviderLocal) UpdatedAt() time.Time {
 func (s *ProviderLocal) reloadFile(path string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed {
-		return context.Canceled
-	}
 	file, err := filemanager.Open(s.ctx, path)
 	if err != nil {
 		return err
@@ -157,24 +181,17 @@ func (s *ProviderLocal) reloadFile(path string) error {
 		return closeErr
 	}
 	s.lastUpdated = fileInfo.ModTime()
-	outboundOpts, endpointOpts, err := parser.ParseSubscription(s.ctx, string(content), s.overrideDialer, s.overrideTLS, s.overrideAnyTLS, s.Tag())
+	outboundOpts, endpointOpts, err := parser.ParseSubscription(parser.ContextWithWarnHandler(s.ctx, s.logger.Warn), string(content), s.overrideDialer, s.overrideTLS, s.overrideAnyTLS, s.overrideTransport, s.Tag())
 	if err != nil {
 		return err
 	}
-	updateErr := s.UpdateNodes(outboundOpts, endpointOpts)
-	s.UpdateGroups()
-	if updateErr != nil {
-		return updateErr
-	}
+	s.UpdateOutbounds(s.lastOutOpts, outboundOpts)
 	s.lastOutOpts = outboundOpts
+	s.UpdateEndpoints(s.lastEPOpts, endpointOpts)
 	s.lastEPOpts = endpointOpts
 	return nil
 }
 
 func (s *ProviderLocal) Close() error {
-	err := common.Close(common.PtrOrNil(s.watcher))
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.closed = true
-	return E.Errors(err, s.Adapter.Close())
+	return common.Close(&s.Adapter, common.PtrOrNil(s.watcher))
 }

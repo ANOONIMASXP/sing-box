@@ -7,7 +7,6 @@ import (
 	"maps"
 	"net"
 	"net/netip"
-	"regexp"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -71,11 +70,11 @@ type LoadBalance struct {
 	outboundsCache map[string][]adapter.Outbound
 
 	providerTags    []string
-	exclude         *regexp.Regexp
-	include         *regexp.Regexp
+	filter          *memberFilter
 	useAllProviders bool
-	hidden          bool
-	icon            string
+
+	hidden bool
+	icon   string
 }
 
 func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.LoadBalanceOutboundOptions) (adapter.Outbound, error) {
@@ -87,6 +86,10 @@ func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.Conte
 	case StrategyRoundRobin, StrategyConsistentHashing, StrategyStickySessions:
 	default:
 		return nil, E.New("load-balance strategy not found: ", strategy)
+	}
+	filter, err := newMemberFilter(ctx, options.GroupCommonOption)
+	if err != nil {
+		return nil, err
 	}
 	outbound := &LoadBalance{
 		Adapter:     outbound.NewAdapter(C.TypeLoadBalance, tag, []string{N.NetworkTCP, N.NetworkUDP}, options.Outbounds),
@@ -105,8 +108,7 @@ func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.Conte
 		outboundsCache: make(map[string][]adapter.Outbound),
 
 		providerTags:    options.Providers,
-		exclude:         (*regexp.Regexp)(options.Exclude),
-		include:         (*regexp.Regexp)(options.Include),
+		filter:          filter,
 		useAllProviders: options.UseAllProviders,
 		hidden:          options.Hidden,
 		icon:            options.Icon,
@@ -125,12 +127,16 @@ func (s *LoadBalance) Hidden() bool { return s.hidden }
 func (s *LoadBalance) Icon() string { return s.icon }
 
 func (s *LoadBalance) Start(stage adapter.StartStage, scope *adapter.Scope) error {
-	if stage != adapter.StartStateStart {
-		if stage == adapter.StartStateStarted {
-			s.group.PostStart()
-		}
-		return nil
+	if stage == adapter.StartStateStart {
+		return s.startGroup(scope)
 	}
+	if stage == adapter.StartStateStarted {
+		s.group.PostStart()
+	}
+	return nil
+}
+
+func (s *LoadBalance) startGroup(scope *adapter.Scope) error {
 	s.providerAccess.Lock()
 	defer s.providerAccess.Unlock()
 	if s.useAllProviders {
@@ -237,8 +243,11 @@ func (s *LoadBalance) CheckOutbounds() {
 	s.group.CheckOutbounds(true)
 }
 
-func (s *LoadBalance) OnConnectionFailure(context.Context) {
-	go s.group.CheckOutbounds(true)
+func (s *LoadBalance) OnConnectionFailure(ctx context.Context, member adapter.Outbound) {
+	if member == nil || ctx.Err() != nil {
+		return
+	}
+	s.group.onOutboundFailed(member)
 }
 
 func (s *LoadBalance) InterfaceUpdated(context.Context) {
@@ -269,10 +278,10 @@ func (s *LoadBalance) DialContext(ctx context.Context, network string, destinati
 	conn, err := outbound.DialContext(ctx, network, destination)
 	if err == nil {
 		adapter.RecordGroupDial(ctx, s.Tag(), outbound)
-		return s.group.interruptGroup.NewConn(conn, interrupt.IsExternalConnectionFromContext(ctx), interrupt.IsResourceDownloadFromContext(ctx)), nil
+		return s.group.newConn(outbound.Tag(), conn, interrupt.IsExternalConnectionFromContext(ctx), interrupt.IsResourceDownloadFromContext(ctx)), nil
 	}
 	s.logger.ErrorContext(ctx, err)
-	s.OnConnectionFailure(ctx)
+	s.OnConnectionFailure(ctx, outbound)
 	return nil, err
 }
 
@@ -286,10 +295,10 @@ func (s *LoadBalance) ListenPacket(ctx context.Context, destination M.Socksaddr)
 	conn, err := outbound.ListenPacket(ctx, destination)
 	if err == nil {
 		adapter.RecordGroupDial(ctx, s.Tag(), outbound)
-		return s.group.interruptGroup.NewPacketConn(conn, interrupt.IsExternalConnectionFromContext(ctx), interrupt.IsResourceDownloadFromContext(ctx)), nil
+		return s.group.newPacketConn(outbound.Tag(), conn, interrupt.IsExternalConnectionFromContext(ctx), interrupt.IsResourceDownloadFromContext(ctx)), nil
 	}
 	s.logger.ErrorContext(ctx, err)
-	s.OnConnectionFailure(ctx)
+	s.OnConnectionFailure(ctx, outbound)
 	return nil, err
 }
 
@@ -312,8 +321,7 @@ func (s *LoadBalance) onProviderUpdated(tag string) error {
 		s.providers,
 		s.providerTags,
 		s.outboundsCache,
-		s.exclude,
-		s.include,
+		s.filter,
 	)
 	if err != nil {
 		s.providerAccess.Unlock()
@@ -356,7 +364,7 @@ type LoadBalanceGroup struct {
 	interval        time.Duration
 	idleTimeout     time.Duration
 	ttl             time.Duration
-	history         *urltest.HistoryStorage
+	history         adapter.URLTestHistoryStorage
 	checking        sync.Mutex
 	fallbackIdx     atomic.Uint32
 	fallbackAccess  sync.Mutex
@@ -369,6 +377,14 @@ type LoadBalanceGroup struct {
 	lastActive      common.TypedValue[time.Time]
 	strategyFn      strategyFn
 	expectedStatus  *urltest.StatusMatcher
+
+	memberInterruptAccess sync.Mutex
+	memberInterrupts      map[string]*interrupt.Group
+
+	failureAccess       sync.Mutex
+	failureProbePending map[string]bool
+	failureTrustUntil   map[string]time.Time
+	emergencyCheckAt    atomic.Int64
 }
 
 func NewLoadBalanceGroup(ctx context.Context, outboundManager adapter.OutboundManager, logger log.Logger, outbounds []adapter.Outbound, link string, interval time.Duration, idleTimeout time.Duration, ttl time.Duration, strategy string, expectedStatus *urltest.StatusMatcher) (*LoadBalanceGroup, error) {
@@ -384,9 +400,11 @@ func NewLoadBalanceGroup(ctx context.Context, outboundManager adapter.OutboundMa
 	if ttl == 0 {
 		ttl = time.Minute * 10
 	}
-	history := service.PtrFromContext[urltest.HistoryStorage](ctx)
-	if history == nil {
-		return nil, E.New("missing URL test history storage")
+	var history adapter.URLTestHistoryStorage
+	if historyFromCtx := service.PtrFromContext[urltest.HistoryStorage](ctx); historyFromCtx != nil {
+		history = historyFromCtx
+	} else {
+		history = urltest.NewHistoryStorage()
 	}
 	if link == "" {
 		link = "https://www.gstatic.com/generate_204"
@@ -422,7 +440,10 @@ func (g *LoadBalanceGroup) PostStart() {
 	defer g.access.Unlock()
 	g.started.Store(true)
 	g.lastActive.Store(time.Now())
-	go g.CheckOutbounds(false)
+	go func() {
+		g.CheckOutbounds(false)
+		g.startupCheckWithBackoff()
+	}()
 }
 
 func (g *LoadBalanceGroup) Touch() {
@@ -520,14 +541,14 @@ func (g *LoadBalanceGroup) urlTestLocked(ctx context.Context, force bool) (map[s
 	return result, nil
 }
 
-func updateLoadBalanceURLTestHistory(outboundManager adapter.OutboundManager, history *urltest.HistoryStorage, tag string, outbounds []adapter.Outbound) *adapter.URLTestHistory {
+func updateLoadBalanceURLTestHistory(outboundManager adapter.OutboundManager, history adapter.URLTestHistoryStorage, tag string, outbounds []adapter.Outbound) *adapter.URLTestHistory {
 	leaves := collectLoadBalanceURLTestLeafHistory(outboundManager, history, outbounds, make(map[string]bool))
 	return updateLoadBalanceURLTestHistoryFromLeaves(history, tag, leaves)
 }
 
 // collectLoadBalanceURLTestLeafHistory follows the selected member of selector-like groups,
 // but includes every member of load-balance groups, which have no global selection.
-func collectLoadBalanceURLTestLeafHistory(outboundManager adapter.OutboundManager, history *urltest.HistoryStorage, outbounds []adapter.Outbound, visiting map[string]bool) map[string]*adapter.URLTestHistory {
+func collectLoadBalanceURLTestLeafHistory(outboundManager adapter.OutboundManager, history adapter.URLTestHistoryStorage, outbounds []adapter.Outbound, visiting map[string]bool) map[string]*adapter.URLTestHistory {
 	leaves := make(map[string]*adapter.URLTestHistory)
 	for _, detour := range outbounds {
 		if detour == nil {
@@ -563,7 +584,7 @@ func collectLoadBalanceURLTestLeafHistory(outboundManager adapter.OutboundManage
 	return leaves
 }
 
-func updateLoadBalanceURLTestHistoryFromLeaves(history *urltest.HistoryStorage, tag string, leaves map[string]*adapter.URLTestHistory) *adapter.URLTestHistory {
+func updateLoadBalanceURLTestHistoryFromLeaves(history adapter.URLTestHistoryStorage, tag string, leaves map[string]*adapter.URLTestHistory) *adapter.URLTestHistory {
 	if len(leaves) == 0 {
 		if history.LoadURLTestHistory(tag) != nil {
 			history.DeleteURLTestHistory(tag)
@@ -621,6 +642,9 @@ func (g *LoadBalanceGroup) aliveForTestURL(proxy adapter.Outbound, network strin
 	if selectedGroup, isGroup := proxy.(adapter.OutboundGroup); isGroup {
 		return g.aliveForTestURL(selectedGroup.Selected(network), network, checked)
 	}
+	if network == N.NetworkUDP && !supportsNetwork(g.history, proxy, N.NetworkUDP) {
+		return false
+	}
 	return g.history.LoadURLTestHistory(proxy.Tag()) != nil
 }
 
@@ -660,6 +684,7 @@ func (g *LoadBalanceGroup) storeOutbounds(outbounds []adapter.Outbound) {
 	g.outboundsAccess.Lock()
 	g.outbounds = outbounds
 	g.outboundsAccess.Unlock()
+	g.pruneMemberInterrupts(outbounds)
 }
 
 func getKey(metadata *adapter.InboundContext) string {

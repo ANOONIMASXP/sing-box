@@ -39,6 +39,7 @@ type InboundTLSOptions struct {
 
 	ECH     *InboundECHOptions     `json:"ech,omitempty"`
 	Reality *InboundRealityOptions `json:"reality,omitempty"`
+	PTLS    *InboundPTLSOptions    `json:"phantom,omitempty"`
 
 	RejectUnknownSNI bool `json:"reject_unknown_sni,omitempty"`
 }
@@ -140,6 +141,7 @@ type OutboundTLSOptions struct {
 	ECH                        *OutboundECHOptions             `json:"ech,omitempty"`
 	UTLS                       *OutboundUTLSOptions            `json:"utls,omitempty"`
 	Reality                    *OutboundRealityOptions         `json:"reality,omitempty"`
+	PTLS                       *OutboundPTLSOptions            `json:"phantom,omitempty"`
 }
 
 type OutboundTLSOptionsContainer struct {
@@ -221,6 +223,30 @@ type InboundRealityOptions struct {
 	PrivateKey        string                         `json:"private_key,omitempty"`
 	ShortID           badoption.Listable[string]     `json:"short_id,omitempty"`
 	MaxTimeDifference badoption.Duration             `json:"max_time_difference,omitempty"`
+	MLDSA65Seed       string                         `json:"mldsa65_seed,omitempty"`
+	KeyShare          string                         `json:"key_share,omitempty" enum:"hybrid,classical"`
+	Fallback          *InboundRealityFallbackOptions `json:"fallback,omitempty"`
+}
+
+type InboundRealityFallbackOptions struct {
+	Enabled        *bool              `json:"enabled,omitempty"`
+	Server         string             `json:"server,omitempty"`
+	ServerPort     uint16             `json:"server_port,omitempty"`
+	Timeout        badoption.Duration `json:"timeout,omitempty"`
+	QOS            string             `json:"qos,omitempty"`
+	MaxConnections string             `json:"max_conn,omitempty"`
+}
+
+type RealityFallbackOptions = InboundRealityFallbackOptions
+
+func (o *InboundRealityFallbackOptions) IsEnabled() bool {
+	if o == nil {
+		return false
+	}
+	if o.Enabled == nil {
+		return true
+	}
+	return *o.Enabled
 }
 
 type InboundRealityHandshakeOptions struct {
@@ -257,7 +283,10 @@ type OutboundUTLSOptions struct {
 }
 
 type OutboundRealityOptions struct {
-	Enabled   bool   `json:"enabled,omitempty"`
-	PublicKey string `json:"public_key,omitempty"`
-	ShortID   string `json:"short_id,omitempty"`
+	Enabled       bool   `json:"enabled,omitempty"`
+	PublicKey     string `json:"public_key,omitempty"`
+	ShortID       string `json:"short_id,omitempty"`
+	KeyShare      string `json:"key_share,omitempty" enum:"hybrid,classical"`
+	MLDSA65Verify string `json:"mldsa65_verify,omitempty"`
+	Version       string `json:"version,omitempty"`
 }

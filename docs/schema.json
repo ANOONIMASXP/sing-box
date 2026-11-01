@@ -125,6 +125,12 @@
     },
     "experimental": {
       "$ref": "#/$defs/ExperimentalOptions"
+    },
+    "remote_verify": {
+      "type": "boolean"
+    },
+    "remote_force_fetch": {
+      "type": "boolean"
     }
   },
   "additionalProperties": false,
@@ -266,6 +272,30 @@
       ]
     },
     "AnyTLSUser": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "AnyXEncryptionOptions": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "AnyXUser": {
       "type": "object",
       "properties": {
         "name": {
@@ -787,6 +817,12 @@
         "tcp_keep_alive_count": {
           "type": "integer"
         },
+<<<<<<< HEAD
+=======
+        "udp_gso": {
+          "type": "boolean"
+        },
+>>>>>>> michong/xiaobaf14g-testing
         "udp_fragment": {
           "type": "boolean"
         },
@@ -832,6 +868,12 @@
         },
         "resolve_on_detour": {
           "type": "boolean"
+<<<<<<< HEAD
+=======
+        },
+        "tcp_concurrent": {
+          "type": "boolean"
+>>>>>>> michong/xiaobaf14g-testing
         }
       },
       "additionalProperties": false
@@ -915,6 +957,30 @@
         },
         "client_subnet": {
           "$ref": "#/$defs/IPAddressOrPrefix"
+        },
+        "tcp_concurrent": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "attempt_delay": {
+                  "$ref": "#/$defs/Duration"
+                },
+                "max_concurrent": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -2049,6 +2115,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -2095,6 +2167,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "prefer_go": {
               "type": "boolean"
             },
@@ -2124,6 +2202,27 @@
           "type": "object",
           "properties": {
             "type": {
+              "const": "easytier"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "endpoint": {
+              "type": "string"
+            },
+            "accept_search_domain": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
               "const": "fakeip"
             },
             "tag": {
@@ -2138,7 +2237,7 @@
             "inet6_range": {
               "$ref": "#/$defs/IPPrefix",
               "examples": [
-                "fc00::/18"
+                "2001:2::/48"
               ]
             }
           },
@@ -2237,6 +2336,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -2283,6 +2388,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -2421,6 +2532,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -2467,6 +2584,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -2561,6 +2684,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -2607,6 +2736,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "prefer_go": {
               "type": "boolean"
             },
@@ -2697,6 +2832,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -2743,6 +2884,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "prefer_go": {
               "type": "boolean"
             },
@@ -2894,6 +3041,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -2940,6 +3093,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -3070,6 +3229,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -3116,6 +3281,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -3198,6 +3369,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -3244,6 +3421,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -3329,6 +3512,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -3375,6 +3564,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -3491,6 +3686,12 @@
         "tcp_keep_alive_count": {
           "type": "integer"
         },
+<<<<<<< HEAD
+=======
+        "udp_gso": {
+          "type": "boolean"
+        },
+>>>>>>> michong/xiaobaf14g-testing
         "udp_fragment": {
           "type": "boolean"
         },
@@ -3536,6 +3737,12 @@
         },
         "resolve_on_detour": {
           "type": "boolean"
+<<<<<<< HEAD
+=======
+        },
+        "tcp_concurrent": {
+          "type": "boolean"
+>>>>>>> michong/xiaobaf14g-testing
         }
       },
       "additionalProperties": false
@@ -3624,8 +3831,13 @@
         "data_plane": {
           "type": "string",
           "enum": [
+<<<<<<< HEAD
             "tc",
             "cgroup"
+=======
+            "cgroup",
+            "socket_assign"
+>>>>>>> michong/xiaobaf14g-testing
           ]
         },
         "cgroup_path": {
@@ -3803,6 +4015,12 @@
         "enabled": {
           "type": "boolean"
         },
+<<<<<<< HEAD
+=======
+        "default_interface": {
+          "type": "boolean"
+        },
+>>>>>>> michong/xiaobaf14g-testing
         "data_plane": {
           "type": "string",
           "enum": [
@@ -3950,8 +4168,421 @@
       },
       "additionalProperties": false
     },
+<<<<<<< HEAD
+=======
+    "EasyTierPortForwardOptions": {
+      "type": "object",
+      "properties": {
+        "network": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "tcp",
+                "udp"
+              ]
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "tcp",
+                  "udp"
+                ]
+              }
+            }
+          ]
+        },
+        "listen": {
+          "type": "string"
+        },
+        "destination": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "EasyTierProxyNetworkOptions": {
+      "type": "object",
+      "properties": {
+        "cidr": {
+          "$ref": "#/$defs/IPPrefix"
+        },
+        "mapped_cidr": {
+          "$ref": "#/$defs/IPPrefix"
+        }
+      },
+      "additionalProperties": false
+    },
+    "EasyTierSecureModeOptions": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "private_key": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "EasyTierWebOptions": {
+      "type": "object",
+      "properties": {
+        "server": {
+          "type": "string"
+        },
+        "machine_id": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "secure_mode": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+>>>>>>> michong/xiaobaf14g-testing
     "Endpoint": {
       "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "easytier"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "detour": {
+              "type": "string",
+              "x-tag-reference": "outbound"
+            },
+            "bind_interface": {
+              "type": "string"
+            },
+            "inet4_bind_address": {
+              "$ref": "#/$defs/IPAddress"
+            },
+            "inet6_bind_address": {
+              "$ref": "#/$defs/IPAddress"
+            },
+            "bind_address_no_port": {
+              "type": "boolean"
+            },
+            "protect_path": {
+              "type": "string"
+            },
+            "routing_mark": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "reuse_addr": {
+              "type": "boolean"
+            },
+            "netns": {
+              "type": "string",
+              "x-tag-reference": "network_namespace"
+            },
+            "connect_timeout": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_fast_open": {
+              "type": "boolean"
+            },
+            "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "disable_tcp_keep_alive": {
+              "type": "boolean"
+            },
+            "tcp_keep_alive": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_keep_alive_interval": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_keep_alive_count": {
+              "type": "integer"
+            },
+            "udp_gso": {
+              "type": "boolean"
+            },
+            "udp_fragment": {
+              "type": "boolean"
+            },
+            "domain_resolver": {
+              "$ref": "#/$defs/DomainResolver"
+            },
+            "network_strategy": {
+              "type": "string",
+              "enum": [
+                "default",
+                "fallback",
+                "hybrid"
+              ]
+            },
+            "network_type": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InterfaceType"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/InterfaceType"
+                  }
+                }
+              ]
+            },
+            "fallback_network_type": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InterfaceType"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/InterfaceType"
+                  }
+                }
+              ]
+            },
+            "fallback_delay": {
+              "$ref": "#/$defs/Duration"
+            },
+            "resolve_on_detour": {
+              "type": "boolean"
+            },
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+            "inner_domain_resolver": {
+              "$ref": "#/$defs/DomainResolver"
+            },
+            "system": {
+              "type": "boolean"
+            },
+            "gso": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "mtu": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "udp_timeout": {
+              "$ref": "#/$defs/Duration"
+            },
+            "udp_mapping": {
+              "type": "string",
+              "enum": [
+                "",
+                "endpoint_independent",
+                "address_dependent",
+                "address_and_port_dependent"
+              ]
+            },
+            "udp_filtering": {
+              "type": "string",
+              "enum": [
+                "",
+                "endpoint_independent",
+                "address_dependent",
+                "address_and_port_dependent"
+              ]
+            },
+            "udp_nat_max": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "network_name": {
+              "type": "string"
+            },
+            "network_secret": {
+              "type": "string"
+            },
+            "hostname": {
+              "type": "string"
+            },
+            "tld_dns_zone": {
+              "type": "string"
+            },
+            "address": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/IPPrefix"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/IPPrefix"
+                  }
+                }
+              ]
+            },
+            "peers": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "listeners": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "proxy_networks": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/EasyTierProxyNetworkOptions"
+              }
+            },
+            "enable_exit_node": {
+              "type": "boolean"
+            },
+            "exit_nodes": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/IPAddress"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/IPAddress"
+                  }
+                }
+              ]
+            },
+            "port_forwards": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/EasyTierPortForwardOptions"
+              }
+            },
+            "stun_servers": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "stun_servers_v6": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "disable_encryption": {
+              "type": "boolean"
+            },
+            "encryption_algorithm": {
+              "type": "string",
+              "enum": [
+                "aes-gcm",
+                "aes-256-gcm",
+                "chacha20",
+                "xor"
+              ]
+            },
+            "secure_mode": {
+              "$ref": "#/$defs/EasyTierSecureModeOptions"
+            },
+            "disable_p2p": {
+              "type": "boolean"
+            },
+            "lazy_p2p": {
+              "type": "boolean"
+            },
+            "need_p2p": {
+              "type": "boolean"
+            },
+            "p2p_only": {
+              "type": "boolean"
+            },
+            "disable_tcp_hole_punching": {
+              "type": "boolean"
+            },
+            "disable_udp_hole_punching": {
+              "type": "boolean"
+            },
+            "disable_sym_hole_punching": {
+              "type": "boolean"
+            },
+            "latency_first": {
+              "type": "boolean"
+            },
+            "private_mode": {
+              "type": "boolean"
+            },
+            "relay_network_whitelist": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "relay_all_peer_rpc": {
+              "type": "boolean"
+            },
+            "web": {
+              "$ref": "#/$defs/EasyTierWebOptions"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
         {
           "type": "object",
           "properties": {
@@ -4029,6 +4660,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -4075,6 +4712,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -4288,6 +4931,9 @@
               "type": "boolean"
             },
             "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "udp_gso": {
               "type": "boolean"
             },
             "udp_fragment": {
@@ -4543,6 +5189,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -4589,6 +5241,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "inner_domain_resolver": {
               "$ref": "#/$defs/DomainResolver"
             },
@@ -4835,6 +5493,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -4881,6 +5545,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -5244,6 +5914,9 @@
             "tcp_multi_path": {
               "type": "boolean"
             },
+            "udp_gso": {
+              "type": "boolean"
+            },
             "udp_fragment": {
               "type": "boolean"
             },
@@ -5525,6 +6198,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -5571,6 +6250,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "inner_domain_resolver": {
               "$ref": "#/$defs/DomainResolver"
             },
@@ -5830,6 +6515,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -5875,6 +6566,12 @@
             },
             "resolve_on_detour": {
               "type": "boolean"
+<<<<<<< HEAD
+=======
+            },
+            "tcp_concurrent": {
+              "type": "boolean"
+>>>>>>> michong/xiaobaf14g-testing
             }
           },
           "required": [
@@ -6056,6 +6753,12 @@
         "tcp_keep_alive_count": {
           "type": "integer"
         },
+<<<<<<< HEAD
+=======
+        "udp_gso": {
+          "type": "boolean"
+        },
+>>>>>>> michong/xiaobaf14g-testing
         "udp_fragment": {
           "type": "boolean"
         },
@@ -6102,6 +6805,12 @@
         "resolve_on_detour": {
           "type": "boolean"
         },
+<<<<<<< HEAD
+=======
+        "tcp_concurrent": {
+          "type": "boolean"
+        },
+>>>>>>> michong/xiaobaf14g-testing
         "idle_timeout": {
           "$ref": "#/$defs/Duration"
         },
@@ -6235,6 +6944,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -6281,6 +6996,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "idle_timeout": {
               "$ref": "#/$defs/Duration"
             },
@@ -6967,6 +7688,9 @@
             "tcp_multi_path": {
               "type": "boolean"
             },
+            "udp_gso": {
+              "type": "boolean"
+            },
             "udp_fragment": {
               "type": "boolean"
             },
@@ -7013,6 +7737,134 @@
               "additionalProperties": {
                 "$ref": "#/$defs/ServerOptions"
               }
+<<<<<<< HEAD
+=======
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "anyx"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "listen": {
+              "$ref": "#/$defs/IPAddress"
+            },
+            "listen_port": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "bind_interface": {
+              "type": "string"
+            },
+            "routing_mark": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "reuse_addr": {
+              "type": "boolean"
+            },
+            "netns": {
+              "type": "string",
+              "x-tag-reference": "network_namespace"
+            },
+            "disable_tcp_keep_alive": {
+              "type": "boolean"
+            },
+            "tcp_keep_alive": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_keep_alive_interval": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_keep_alive_count": {
+              "type": "integer"
+            },
+            "tcp_fast_open": {
+              "type": "boolean"
+            },
+            "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "udp_gso": {
+              "type": "boolean"
+            },
+            "udp_fragment": {
+              "type": "boolean"
+            },
+            "udp_timeout": {
+              "$ref": "#/$defs/UDPTimeout"
+            },
+            "detour": {
+              "type": "string",
+              "x-tag-reference": "inbound"
+            },
+            "proxy_protocol": {
+              "type": "boolean"
+            },
+            "proxy_protocol_accept_no_header": {
+              "type": "boolean"
+            },
+            "tls": {
+              "$ref": "#/$defs/InboundTLSOptions"
+            },
+            "transport": {
+              "$ref": "#/$defs/V2RayTransport"
+            },
+            "encryption": {
+              "$ref": "#/$defs/AnyXEncryptionOptions"
+            },
+            "users": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/AnyXUser"
+              }
+            },
+            "padding_scheme": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "padding_scheme_interval": {
+              "$ref": "#/$defs/Duration"
+            },
+            "padding_limit": {
+              "type": "integer"
+            },
+            "fallback": {
+              "$ref": "#/$defs/ServerOptions"
+            },
+            "fallback_for_alpn": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/ServerOptions"
+              }
+>>>>>>> michong/xiaobaf14g-testing
             }
           },
           "required": [
@@ -7135,6 +7987,9 @@
               "type": "boolean"
             },
             "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "udp_gso": {
               "type": "boolean"
             },
             "udp_fragment": {
@@ -7311,6 +8166,9 @@
               "type": "boolean"
             },
             "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "udp_gso": {
               "type": "boolean"
             },
             "udp_fragment": {
@@ -7497,6 +8355,9 @@
             "tcp_multi_path": {
               "type": "boolean"
             },
+            "udp_gso": {
+              "type": "boolean"
+            },
             "udp_fragment": {
               "type": "boolean"
             },
@@ -7651,6 +8512,9 @@
               "type": "boolean"
             },
             "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "udp_gso": {
               "type": "boolean"
             },
             "udp_fragment": {
@@ -7906,6 +8770,9 @@
             "tcp_multi_path": {
               "type": "boolean"
             },
+            "udp_gso": {
+              "type": "boolean"
+            },
             "udp_fragment": {
               "type": "boolean"
             },
@@ -8000,6 +8867,9 @@
             "tcp_multi_path": {
               "type": "boolean"
             },
+            "udp_gso": {
+              "type": "boolean"
+            },
             "udp_fragment": {
               "type": "boolean"
             },
@@ -8064,6 +8934,525 @@
           "type": "object",
           "properties": {
             "type": {
+              "const": "nowhere"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "listen": {
+              "$ref": "#/$defs/IPAddress"
+            },
+            "listen_port": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "bind_interface": {
+              "type": "string"
+            },
+            "routing_mark": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "reuse_addr": {
+              "type": "boolean"
+            },
+            "netns": {
+              "type": "string",
+              "x-tag-reference": "network_namespace"
+            },
+            "disable_tcp_keep_alive": {
+              "type": "boolean"
+            },
+            "tcp_keep_alive": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_keep_alive_interval": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_keep_alive_count": {
+              "type": "integer"
+            },
+            "tcp_fast_open": {
+              "type": "boolean"
+            },
+            "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "udp_gso": {
+              "type": "boolean"
+            },
+            "udp_fragment": {
+              "type": "boolean"
+            },
+            "udp_timeout": {
+              "$ref": "#/$defs/UDPTimeout"
+            },
+            "detour": {
+              "type": "string",
+              "x-tag-reference": "inbound"
+            },
+            "proxy_protocol": {
+              "type": "boolean"
+            },
+            "proxy_protocol_accept_no_header": {
+              "type": "boolean"
+            },
+            "password": {
+              "type": "string"
+            },
+            "morph": {
+              "type": "boolean"
+            },
+            "network": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "tcp",
+                    "udp"
+                  ]
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "tcp",
+                      "udp"
+                    ]
+                  }
+                }
+              ]
+            },
+            "quic_congestion_control": {
+              "type": "string"
+            },
+            "max_unauthenticated_connections": {
+              "type": "integer"
+            },
+            "max_unauthenticated_per_source": {
+              "type": "integer"
+            },
+            "next": {
+              "$ref": "#/$defs/NowhereNextOptions"
+            },
+            "net": {
+              "type": "string"
+            },
+            "egress": {
+              "type": "boolean"
+            },
+            "tls": {
+              "$ref": "#/$defs/InboundTLSOptions"
+            },
+            "idle_timeout": {
+              "$ref": "#/$defs/Duration"
+            },
+            "keep_alive_period": {
+              "$ref": "#/$defs/Duration"
+            },
+            "stream_receive_window": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "connection_receive_window": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "max_concurrent_streams": {
+              "type": "integer"
+            },
+            "initial_packet_size": {
+              "type": "integer"
+            },
+            "disable_path_mtu_discovery": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "nowhere-egress"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "detour": {
+              "type": "string",
+              "x-tag-reference": "outbound"
+            },
+            "bind_interface": {
+              "type": "string"
+            },
+            "inet4_bind_address": {
+              "$ref": "#/$defs/IPAddress"
+            },
+            "inet6_bind_address": {
+              "$ref": "#/$defs/IPAddress"
+            },
+            "bind_address_no_port": {
+              "type": "boolean"
+            },
+            "protect_path": {
+              "type": "string"
+            },
+            "routing_mark": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "reuse_addr": {
+              "type": "boolean"
+            },
+            "netns": {
+              "type": "string",
+              "x-tag-reference": "network_namespace"
+            },
+            "connect_timeout": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_fast_open": {
+              "type": "boolean"
+            },
+            "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "disable_tcp_keep_alive": {
+              "type": "boolean"
+            },
+            "tcp_keep_alive": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_keep_alive_interval": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_keep_alive_count": {
+              "type": "integer"
+            },
+            "udp_gso": {
+              "type": "boolean"
+            },
+            "udp_fragment": {
+              "type": "boolean"
+            },
+            "domain_resolver": {
+              "$ref": "#/$defs/DomainResolver"
+            },
+            "network_strategy": {
+              "type": "string",
+              "enum": [
+                "default",
+                "fallback",
+                "hybrid"
+              ]
+            },
+            "network_type": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InterfaceType"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/InterfaceType"
+                  }
+                }
+              ]
+            },
+            "fallback_network_type": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InterfaceType"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/InterfaceType"
+                  }
+                }
+              ]
+            },
+            "fallback_delay": {
+              "$ref": "#/$defs/Duration"
+            },
+            "resolve_on_detour": {
+              "type": "boolean"
+            },
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+            "server": {
+              "type": "string"
+            },
+            "server_port": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "password": {
+              "type": "string"
+            },
+            "morph": {
+              "type": "boolean"
+            },
+            "pin": {
+              "type": "string"
+            },
+            "insecure": {
+              "type": "boolean"
+            },
+            "server_name": {
+              "type": "string"
+            },
+            "quic_congestion_control": {
+              "type": "string"
+            },
+            "idle_timeout": {
+              "$ref": "#/$defs/Duration"
+            },
+            "keep_alive_period": {
+              "$ref": "#/$defs/Duration"
+            },
+            "stream_receive_window": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "connection_receive_window": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "max_concurrent_streams": {
+              "type": "integer"
+            },
+            "initial_packet_size": {
+              "type": "integer"
+            },
+            "disable_path_mtu_discovery": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "quicx"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "listen": {
+              "$ref": "#/$defs/IPAddress"
+            },
+            "listen_port": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "bind_interface": {
+              "type": "string"
+            },
+            "routing_mark": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "reuse_addr": {
+              "type": "boolean"
+            },
+            "netns": {
+              "type": "string",
+              "x-tag-reference": "network_namespace"
+            },
+            "disable_tcp_keep_alive": {
+              "type": "boolean"
+            },
+            "tcp_keep_alive": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_keep_alive_interval": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_keep_alive_count": {
+              "type": "integer"
+            },
+            "tcp_fast_open": {
+              "type": "boolean"
+            },
+            "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "udp_gso": {
+              "type": "boolean"
+            },
+            "udp_fragment": {
+              "type": "boolean"
+            },
+            "udp_timeout": {
+              "$ref": "#/$defs/UDPTimeout"
+            },
+            "detour": {
+              "type": "string",
+              "x-tag-reference": "inbound"
+            },
+            "proxy_protocol": {
+              "type": "boolean"
+            },
+            "proxy_protocol_accept_no_header": {
+              "type": "boolean"
+            },
+            "users": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/QUICXUser"
+              }
+            },
+            "auth_timeout": {
+              "$ref": "#/$defs/Duration"
+            },
+            "heartbeat": {
+              "$ref": "#/$defs/Duration"
+            },
+            "auth_failure_policy": {
+              "type": "string",
+              "enum": [
+                "h3_close",
+                "silent_drop"
+              ]
+            },
+            "bbr_profile": {
+              "type": "string",
+              "enum": [
+                "standard",
+                "conservative",
+                "aggressive"
+              ]
+            },
+            "qlog_directory": {
+              "type": "string"
+            },
+            "qlog_max_size": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "tls": {
+              "$ref": "#/$defs/InboundTLSOptions"
+            },
+            "idle_timeout": {
+              "$ref": "#/$defs/Duration"
+            },
+            "keep_alive_period": {
+              "$ref": "#/$defs/Duration"
+            },
+            "stream_receive_window": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "connection_receive_window": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "max_concurrent_streams": {
+              "type": "integer"
+            },
+            "initial_packet_size": {
+              "type": "integer"
+            },
+            "disable_path_mtu_discovery": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
               "const": "redirect"
             },
             "tag": {
@@ -8115,6 +9504,9 @@
               "type": "boolean"
             },
             "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "udp_gso": {
               "type": "boolean"
             },
             "udp_fragment": {
@@ -8194,6 +9586,9 @@
               "type": "boolean"
             },
             "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "udp_gso": {
               "type": "boolean"
             },
             "udp_fragment": {
@@ -8341,6 +9736,9 @@
             "tcp_multi_path": {
               "type": "boolean"
             },
+            "udp_gso": {
+              "type": "boolean"
+            },
             "udp_fragment": {
               "type": "boolean"
             },
@@ -8463,6 +9861,9 @@
                 "tcp_multi_path": {
                   "type": "boolean"
                 },
+                "udp_gso": {
+                  "type": "boolean"
+                },
                 "udp_fragment": {
                   "type": "boolean"
                 },
@@ -8569,6 +9970,9 @@
                 "tcp_multi_path": {
                   "type": "boolean"
                 },
+                "udp_gso": {
+                  "type": "boolean"
+                },
                 "udp_fragment": {
                   "type": "boolean"
                 },
@@ -8673,6 +10077,9 @@
               "type": "boolean"
             },
             "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "udp_gso": {
               "type": "boolean"
             },
             "udp_fragment": {
@@ -8833,6 +10240,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -8878,6 +10291,12 @@
             },
             "resolve_on_detour": {
               "type": "boolean"
+<<<<<<< HEAD
+=======
+            },
+            "tcp_concurrent": {
+              "type": "boolean"
+>>>>>>> michong/xiaobaf14g-testing
             }
           },
           "required": [
@@ -8940,6 +10359,9 @@
               "type": "boolean"
             },
             "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "udp_gso": {
               "type": "boolean"
             },
             "udp_fragment": {
@@ -9065,6 +10487,9 @@
             "tcp_multi_path": {
               "type": "boolean"
             },
+            "udp_gso": {
+              "type": "boolean"
+            },
             "udp_fragment": {
               "type": "boolean"
             },
@@ -9166,6 +10591,9 @@
               "type": "boolean"
             },
             "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "udp_gso": {
               "type": "boolean"
             },
             "udp_fragment": {
@@ -9704,6 +11132,9 @@
             "tcp_multi_path": {
               "type": "boolean"
             },
+            "udp_gso": {
+              "type": "boolean"
+            },
             "udp_fragment": {
               "type": "boolean"
             },
@@ -9725,6 +11156,9 @@
               "items": {
                 "$ref": "#/$defs/VLESSUser"
               }
+            },
+            "decryption": {
+              "type": "string"
             },
             "tls": {
               "$ref": "#/$defs/InboundTLSOptions"
@@ -9796,6 +11230,9 @@
               "type": "boolean"
             },
             "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "udp_gso": {
               "type": "boolean"
             },
             "udp_fragment": {
@@ -9877,6 +11314,155 @@
       },
       "additionalProperties": false
     },
+    "InboundPTLSFallbackOptions": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "server": {
+          "type": "string"
+        },
+        "server_port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "qos": {
+          "type": "string"
+        },
+        "qps": {
+          "type": "integer"
+        },
+        "timeout": {
+          "$ref": "#/$defs/Duration"
+        }
+      },
+      "additionalProperties": false
+    },
+    "InboundPTLSOptions": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "password": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "ca_certificate": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "ca_certificate_path": {
+          "type": "string"
+        },
+        "ca_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "ca_key_path": {
+          "type": "string"
+        },
+        "certificate_domains": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "certificate_validity": {
+          "$ref": "#/$defs/Duration"
+        },
+        "leaf_type": {
+          "type": "string"
+        },
+        "leaf_der_size": {
+          "type": "integer"
+        },
+        "chain_der_size": {
+          "type": "integer"
+        },
+        "target_entropy": {
+          "type": "number"
+        },
+        "fallback": {
+          "$ref": "#/$defs/InboundPTLSFallbackOptions"
+        },
+        "reject_unknown_sni": {
+          "type": "boolean"
+        },
+        "time_tolerance": {
+          "$ref": "#/$defs/Duration"
+        },
+        "replay_cache_size": {
+          "type": "integer"
+        },
+        "handshake_timeout": {
+          "$ref": "#/$defs/Duration"
+        }
+      },
+      "additionalProperties": false
+    },
+    "InboundRealityFallbackOptions": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "server": {
+          "type": "string"
+        },
+        "server_port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "timeout": {
+          "$ref": "#/$defs/Duration"
+        },
+        "qos": {
+          "type": "string"
+        },
+        "max_conn": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "InboundRealityHandshakeOptions": {
       "type": "object",
       "properties": {
@@ -9947,6 +11533,12 @@
         "tcp_keep_alive_count": {
           "type": "integer"
         },
+<<<<<<< HEAD
+=======
+        "udp_gso": {
+          "type": "boolean"
+        },
+>>>>>>> michong/xiaobaf14g-testing
         "udp_fragment": {
           "type": "boolean"
         },
@@ -9992,6 +11584,12 @@
         },
         "resolve_on_detour": {
           "type": "boolean"
+<<<<<<< HEAD
+=======
+        },
+        "tcp_concurrent": {
+          "type": "boolean"
+>>>>>>> michong/xiaobaf14g-testing
         }
       },
       "additionalProperties": false
@@ -10023,6 +11621,19 @@
         },
         "max_time_difference": {
           "$ref": "#/$defs/Duration"
+        },
+        "mldsa65_seed": {
+          "type": "string"
+        },
+        "key_share": {
+          "type": "string",
+          "enum": [
+            "hybrid",
+            "classical"
+          ]
+        },
+        "fallback": {
+          "$ref": "#/$defs/InboundRealityFallbackOptions"
         }
       },
       "additionalProperties": false
@@ -10272,6 +11883,12 @@
         "reality": {
           "$ref": "#/$defs/InboundRealityOptions"
         },
+<<<<<<< HEAD
+=======
+        "phantom": {
+          "$ref": "#/$defs/InboundPTLSOptions"
+        },
+>>>>>>> michong/xiaobaf14g-testing
         "reject_unknown_sni": {
           "type": "boolean"
         }
@@ -10394,6 +12011,12 @@
         "tcp_keep_alive_count": {
           "type": "integer"
         },
+<<<<<<< HEAD
+=======
+        "udp_gso": {
+          "type": "boolean"
+        },
+>>>>>>> michong/xiaobaf14g-testing
         "udp_fragment": {
           "type": "boolean"
         },
@@ -10439,6 +12062,12 @@
         },
         "resolve_on_detour": {
           "type": "boolean"
+<<<<<<< HEAD
+=======
+        },
+        "tcp_concurrent": {
+          "type": "boolean"
+>>>>>>> michong/xiaobaf14g-testing
         }
       },
       "additionalProperties": false
@@ -11739,6 +13368,50 @@
         }
       ]
     },
+    "NowhereNextOptions": {
+      "type": "object",
+      "properties": {
+        "server": {
+          "type": "string"
+        },
+        "server_port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "password": {
+          "type": "string"
+        },
+        "up": {
+          "type": "string"
+        },
+        "down": {
+          "type": "string"
+        },
+        "mux": {
+          "type": "integer"
+        },
+        "pool": {
+          "type": "integer"
+        },
+        "server_name": {
+          "type": "string"
+        },
+        "pin": {
+          "type": "string"
+        },
+        "morph": {
+          "type": "boolean"
+        },
+        "dial4": {
+          "type": "string"
+        },
+        "dial6": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "OCMUser": {
       "type": "object",
       "properties": {
@@ -12626,6 +14299,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -12672,6 +14351,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -12700,6 +14385,231 @@
             },
             "disable_reuse": {
               "type": "boolean"
+<<<<<<< HEAD
+=======
+            },
+            "network": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "tcp",
+                    "udp"
+                  ]
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "tcp",
+                      "udp"
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "anyx"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "detour": {
+              "type": "string",
+              "x-tag-reference": "outbound"
+            },
+            "bind_interface": {
+              "type": "string"
+            },
+            "inet4_bind_address": {
+              "$ref": "#/$defs/IPAddress"
+            },
+            "inet6_bind_address": {
+              "$ref": "#/$defs/IPAddress"
+            },
+            "bind_address_no_port": {
+              "type": "boolean"
+            },
+            "protect_path": {
+              "type": "string"
+            },
+            "routing_mark": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "reuse_addr": {
+              "type": "boolean"
+            },
+            "netns": {
+              "type": "string",
+              "x-tag-reference": "network_namespace"
+            },
+            "connect_timeout": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_fast_open": {
+              "type": "boolean"
+            },
+            "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "disable_tcp_keep_alive": {
+              "type": "boolean"
+            },
+            "tcp_keep_alive": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_keep_alive_interval": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_keep_alive_count": {
+              "type": "integer"
+            },
+            "udp_gso": {
+              "type": "boolean"
+            },
+            "udp_fragment": {
+              "type": "boolean"
+            },
+            "domain_resolver": {
+              "$ref": "#/$defs/DomainResolver"
+            },
+            "network_strategy": {
+              "type": "string",
+              "enum": [
+                "default",
+                "fallback",
+                "hybrid"
+              ]
+            },
+            "network_type": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InterfaceType"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/InterfaceType"
+                  }
+                }
+              ]
+            },
+            "fallback_network_type": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InterfaceType"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/InterfaceType"
+                  }
+                }
+              ]
+            },
+            "fallback_delay": {
+              "$ref": "#/$defs/Duration"
+            },
+            "resolve_on_detour": {
+              "type": "boolean"
+            },
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+            "server": {
+              "type": "string"
+            },
+            "server_port": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "tls": {
+              "$ref": "#/$defs/OutboundTLSOptions"
+            },
+            "transport": {
+              "$ref": "#/$defs/V2RayTransport"
+            },
+            "encryption": {
+              "$ref": "#/$defs/AnyXEncryptionOptions"
+            },
+            "password": {
+              "type": "string"
+            },
+            "padding_scheme": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "padding_scheme_interval": {
+              "$ref": "#/$defs/Duration"
+            },
+            "idle_session_min_timeout": {
+              "$ref": "#/$defs/Duration"
+            },
+            "idle_session_timeout": {
+              "$ref": "#/$defs/Duration"
+            },
+            "min_idle_session": {
+              "type": "integer"
+            },
+            "client_metadata": {
+              "type": "string"
+            },
+            "disable_reuse": {
+              "type": "boolean"
+            },
+            "network": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "tcp",
+                    "udp"
+                  ]
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "tcp",
+                      "udp"
+                    ]
+                  }
+                }
+              ]
+            },
+            "idle_session_check_interval": {
+              "$ref": "#/$defs/Duration"
+>>>>>>> michong/xiaobaf14g-testing
             }
           },
           "required": [
@@ -12820,6 +14730,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -12866,6 +14782,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "direct_domain_strategy": {
               "$ref": "#/$defs/DomainStrategy"
             },
@@ -12961,6 +14883,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -13007,6 +14935,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -13029,6 +14963,27 @@
             },
             "headers": {
               "$ref": "#/$defs/HTTPHeader"
+            },
+            "network": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "tcp",
+                    "udp"
+                  ]
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "tcp",
+                      "udp"
+                    ]
+                  }
+                }
+              ]
             },
             "version": {
               "type": "integer",
@@ -13174,6 +15129,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -13220,6 +15181,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -13421,6 +15388,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -13467,6 +15440,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -13649,6 +15628,82 @@
             "include": {
               "type": "string"
             },
+<<<<<<< HEAD
+=======
+            "include_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "exclude_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "include_transport": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "exclude_transport": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "network": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "tcp",
+                    "udp"
+                  ]
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "tcp",
+                      "udp"
+                    ]
+                  }
+                }
+              ]
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "use_all_providers": {
               "type": "boolean"
             },
@@ -13747,6 +15802,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -13793,6 +15854,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -13885,6 +15952,350 @@
           "type": "object",
           "properties": {
             "type": {
+<<<<<<< HEAD
+=======
+              "const": "nested"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "outbounds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "x-tag-reference": "outbound"
+              }
+            },
+            "providers": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "x-tag-reference": "provider"
+              }
+            },
+            "exclude": {
+              "type": "string"
+            },
+            "include": {
+              "type": "string"
+            },
+            "include_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "exclude_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "include_transport": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "exclude_transport": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "network": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "tcp",
+                    "udp"
+                  ]
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "tcp",
+                      "udp"
+                    ]
+                  }
+                }
+              ]
+            },
+            "use_all_providers": {
+              "type": "boolean"
+            },
+            "hidden": {
+              "type": "boolean"
+            },
+            "icon": {
+              "type": "string"
+            },
+            "default": {
+              "type": "string",
+              "x-tag-reference": "outbound"
+            },
+            "interrupt_exist_connections": {
+              "type": "boolean"
+            },
+            "detour": {
+              "type": "string",
+              "x-tag-reference": "outbound"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "nowhere"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "detour": {
+              "type": "string",
+              "x-tag-reference": "outbound"
+            },
+            "bind_interface": {
+              "type": "string"
+            },
+            "inet4_bind_address": {
+              "$ref": "#/$defs/IPAddress"
+            },
+            "inet6_bind_address": {
+              "$ref": "#/$defs/IPAddress"
+            },
+            "bind_address_no_port": {
+              "type": "boolean"
+            },
+            "protect_path": {
+              "type": "string"
+            },
+            "routing_mark": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "reuse_addr": {
+              "type": "boolean"
+            },
+            "netns": {
+              "type": "string",
+              "x-tag-reference": "network_namespace"
+            },
+            "connect_timeout": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_fast_open": {
+              "type": "boolean"
+            },
+            "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "disable_tcp_keep_alive": {
+              "type": "boolean"
+            },
+            "tcp_keep_alive": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_keep_alive_interval": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_keep_alive_count": {
+              "type": "integer"
+            },
+            "udp_gso": {
+              "type": "boolean"
+            },
+            "udp_fragment": {
+              "type": "boolean"
+            },
+            "domain_resolver": {
+              "$ref": "#/$defs/DomainResolver"
+            },
+            "network_strategy": {
+              "type": "string",
+              "enum": [
+                "default",
+                "fallback",
+                "hybrid"
+              ]
+            },
+            "network_type": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InterfaceType"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/InterfaceType"
+                  }
+                }
+              ]
+            },
+            "fallback_network_type": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InterfaceType"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/InterfaceType"
+                  }
+                }
+              ]
+            },
+            "fallback_delay": {
+              "$ref": "#/$defs/Duration"
+            },
+            "resolve_on_detour": {
+              "type": "boolean"
+            },
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+            "server": {
+              "type": "string"
+            },
+            "server_port": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "password": {
+              "type": "string"
+            },
+            "pin": {
+              "type": "string"
+            },
+            "up": {
+              "type": "string"
+            },
+            "down": {
+              "type": "string"
+            },
+            "mux": {
+              "type": "integer"
+            },
+            "pool": {
+              "type": "integer"
+            },
+            "morph": {
+              "type": "boolean"
+            },
+            "prewarm_on_start": {
+              "type": "boolean"
+            },
+            "max_concurrent_dials": {
+              "type": "integer"
+            },
+            "warm_backoff_initial": {
+              "$ref": "#/$defs/Duration"
+            },
+            "warm_backoff_max": {
+              "$ref": "#/$defs/Duration"
+            },
+            "quic_congestion_control": {
+              "type": "string"
+            },
+            "net": {
+              "type": "string"
+            },
+            "tls": {
+              "$ref": "#/$defs/OutboundTLSOptions"
+            },
+            "idle_timeout": {
+              "$ref": "#/$defs/Duration"
+            },
+            "keep_alive_period": {
+              "$ref": "#/$defs/Duration"
+            },
+            "stream_receive_window": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "connection_receive_window": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "max_concurrent_streams": {
+              "type": "integer"
+            },
+            "initial_packet_size": {
+              "type": "integer"
+            },
+            "disable_path_mtu_discovery": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+>>>>>>> michong/xiaobaf14g-testing
               "const": "pass"
             },
             "tag": {
@@ -13900,6 +16311,232 @@
           "type": "object",
           "properties": {
             "type": {
+<<<<<<< HEAD
+=======
+              "const": "quicx"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "detour": {
+              "type": "string",
+              "x-tag-reference": "outbound"
+            },
+            "bind_interface": {
+              "type": "string"
+            },
+            "inet4_bind_address": {
+              "$ref": "#/$defs/IPAddress"
+            },
+            "inet6_bind_address": {
+              "$ref": "#/$defs/IPAddress"
+            },
+            "bind_address_no_port": {
+              "type": "boolean"
+            },
+            "protect_path": {
+              "type": "string"
+            },
+            "routing_mark": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "reuse_addr": {
+              "type": "boolean"
+            },
+            "netns": {
+              "type": "string",
+              "x-tag-reference": "network_namespace"
+            },
+            "connect_timeout": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_fast_open": {
+              "type": "boolean"
+            },
+            "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "disable_tcp_keep_alive": {
+              "type": "boolean"
+            },
+            "tcp_keep_alive": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_keep_alive_interval": {
+              "$ref": "#/$defs/Duration"
+            },
+            "tcp_keep_alive_count": {
+              "type": "integer"
+            },
+            "udp_gso": {
+              "type": "boolean"
+            },
+            "udp_fragment": {
+              "type": "boolean"
+            },
+            "domain_resolver": {
+              "$ref": "#/$defs/DomainResolver"
+            },
+            "network_strategy": {
+              "type": "string",
+              "enum": [
+                "default",
+                "fallback",
+                "hybrid"
+              ]
+            },
+            "network_type": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InterfaceType"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/InterfaceType"
+                  }
+                }
+              ]
+            },
+            "fallback_network_type": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InterfaceType"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/InterfaceType"
+                  }
+                }
+              ]
+            },
+            "fallback_delay": {
+              "$ref": "#/$defs/Duration"
+            },
+            "resolve_on_detour": {
+              "type": "boolean"
+            },
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+            "server": {
+              "type": "string"
+            },
+            "server_port": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "password": {
+              "type": "string"
+            },
+            "heartbeat": {
+              "$ref": "#/$defs/Duration"
+            },
+            "bbr_profile": {
+              "type": "string",
+              "enum": [
+                "standard",
+                "conservative",
+                "aggressive"
+              ]
+            },
+            "qlog_directory": {
+              "type": "string"
+            },
+            "qlog_max_size": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "network": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "tcp",
+                    "udp"
+                  ]
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "tcp",
+                      "udp"
+                    ]
+                  }
+                }
+              ]
+            },
+            "tls": {
+              "$ref": "#/$defs/OutboundTLSOptions"
+            },
+            "idle_timeout": {
+              "$ref": "#/$defs/Duration"
+            },
+            "keep_alive_period": {
+              "$ref": "#/$defs/Duration"
+            },
+            "stream_receive_window": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "connection_receive_window": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "max_concurrent_streams": {
+              "type": "integer"
+            },
+            "initial_packet_size": {
+              "type": "integer"
+            },
+            "disable_path_mtu_discovery": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+>>>>>>> michong/xiaobaf14g-testing
               "const": "selector"
             },
             "tag": {
@@ -13925,6 +16562,82 @@
             "include": {
               "type": "string"
             },
+<<<<<<< HEAD
+=======
+            "include_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "exclude_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "include_transport": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "exclude_transport": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "network": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "tcp",
+                    "udp"
+                  ]
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "tcp",
+                      "udp"
+                    ]
+                  }
+                }
+              ]
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "use_all_providers": {
               "type": "boolean"
             },
@@ -14015,6 +16728,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -14061,6 +16780,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -14224,6 +16949,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -14270,6 +17001,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -14327,6 +17064,82 @@
             "include": {
               "type": "string"
             },
+<<<<<<< HEAD
+=======
+            "include_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "exclude_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "include_transport": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "exclude_transport": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "network": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "tcp",
+                    "udp"
+                  ]
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "tcp",
+                      "udp"
+                    ]
+                  }
+                }
+              ]
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "use_all_providers": {
               "type": "boolean"
             },
@@ -14342,6 +17155,15 @@
             "interval": {
               "$ref": "#/$defs/Duration"
             },
+<<<<<<< HEAD
+=======
+            "idle_timeout": {
+              "$ref": "#/$defs/Duration"
+            },
+            "timeout": {
+              "$ref": "#/$defs/Duration"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "expected_status": {
               "type": "string"
             },
@@ -14351,7 +17173,22 @@
             "disable_udp": {
               "type": "boolean"
             },
+<<<<<<< HEAD
             "use_asn": {
+=======
+            "max_failed_times": {
+              "type": "integer"
+            },
+            "tolerance": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "policy_priority": {
+              "type": "string"
+            },
+            "prefer_asn": {
+>>>>>>> michong/xiaobaf14g-testing
               "type": "boolean"
             },
             "use_lightgbm": {
@@ -14362,6 +17199,7 @@
             },
             "sample_rate": {
               "type": "number"
+<<<<<<< HEAD
             },
             "max_host_failed_times": {
               "type": "integer"
@@ -14387,6 +17225,8 @@
                   }
                 }
               ]
+=======
+>>>>>>> michong/xiaobaf14g-testing
             }
           },
           "required": [
@@ -14423,6 +17263,82 @@
             "include": {
               "type": "string"
             },
+<<<<<<< HEAD
+=======
+            "include_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "exclude_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "include_transport": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "exclude_transport": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "network": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "tcp",
+                    "udp"
+                  ]
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "tcp",
+                      "udp"
+                    ]
+                  }
+                }
+              ]
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "use_all_providers": {
               "type": "boolean"
             },
@@ -14438,6 +17354,15 @@
             "interval": {
               "$ref": "#/$defs/Duration"
             },
+<<<<<<< HEAD
+=======
+            "idle_timeout": {
+              "$ref": "#/$defs/Duration"
+            },
+            "timeout": {
+              "$ref": "#/$defs/Duration"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "expected_status": {
               "type": "string"
             },
@@ -14447,7 +17372,22 @@
             "disable_udp": {
               "type": "boolean"
             },
+<<<<<<< HEAD
             "use_asn": {
+=======
+            "max_failed_times": {
+              "type": "integer"
+            },
+            "tolerance": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "policy_priority": {
+              "type": "string"
+            },
+            "prefer_asn": {
+>>>>>>> michong/xiaobaf14g-testing
               "type": "boolean"
             },
             "use_lightgbm": {
@@ -14459,6 +17399,7 @@
             "sample_rate": {
               "type": "number"
             },
+<<<<<<< HEAD
             "max_host_failed_times": {
               "type": "integer"
             },
@@ -14484,6 +17425,8 @@
                 }
               ]
             },
+=======
+>>>>>>> michong/xiaobaf14g-testing
             "balance": {
               "$ref": "#/$defs/SmartBalanceOptions"
             },
@@ -14600,6 +17543,12 @@
                 "tcp_keep_alive_count": {
                   "type": "integer"
                 },
+<<<<<<< HEAD
+=======
+                "udp_gso": {
+                  "type": "boolean"
+                },
+>>>>>>> michong/xiaobaf14g-testing
                 "udp_fragment": {
                   "type": "boolean"
                 },
@@ -14646,6 +17595,12 @@
                 "resolve_on_detour": {
                   "type": "boolean"
                 },
+<<<<<<< HEAD
+=======
+                "tcp_concurrent": {
+                  "type": "boolean"
+                },
+>>>>>>> michong/xiaobaf14g-testing
                 "server": {
                   "type": "string"
                 },
@@ -14773,6 +17728,12 @@
                 "tcp_keep_alive_count": {
                   "type": "integer"
                 },
+<<<<<<< HEAD
+=======
+                "udp_gso": {
+                  "type": "boolean"
+                },
+>>>>>>> michong/xiaobaf14g-testing
                 "udp_fragment": {
                   "type": "boolean"
                 },
@@ -14819,6 +17780,12 @@
                 "resolve_on_detour": {
                   "type": "boolean"
                 },
+<<<<<<< HEAD
+=======
+                "tcp_concurrent": {
+                  "type": "boolean"
+                },
+>>>>>>> michong/xiaobaf14g-testing
                 "server": {
                   "type": "string"
                 },
@@ -14946,6 +17913,12 @@
                 "tcp_keep_alive_count": {
                   "type": "integer"
                 },
+<<<<<<< HEAD
+=======
+                "udp_gso": {
+                  "type": "boolean"
+                },
+>>>>>>> michong/xiaobaf14g-testing
                 "udp_fragment": {
                   "type": "boolean"
                 },
@@ -14992,6 +17965,12 @@
                 "resolve_on_detour": {
                   "type": "boolean"
                 },
+<<<<<<< HEAD
+=======
+                "tcp_concurrent": {
+                  "type": "boolean"
+                },
+>>>>>>> michong/xiaobaf14g-testing
                 "server": {
                   "type": "string"
                 },
@@ -15119,6 +18098,12 @@
                 "tcp_keep_alive_count": {
                   "type": "integer"
                 },
+<<<<<<< HEAD
+=======
+                "udp_gso": {
+                  "type": "boolean"
+                },
+>>>>>>> michong/xiaobaf14g-testing
                 "udp_fragment": {
                   "type": "boolean"
                 },
@@ -15165,6 +18150,12 @@
                 "resolve_on_detour": {
                   "type": "boolean"
                 },
+<<<<<<< HEAD
+=======
+                "tcp_concurrent": {
+                  "type": "boolean"
+                },
+>>>>>>> michong/xiaobaf14g-testing
                 "server": {
                   "type": "string"
                 },
@@ -15291,6 +18282,12 @@
                 "tcp_keep_alive_count": {
                   "type": "integer"
                 },
+<<<<<<< HEAD
+=======
+                "udp_gso": {
+                  "type": "boolean"
+                },
+>>>>>>> michong/xiaobaf14g-testing
                 "udp_fragment": {
                   "type": "boolean"
                 },
@@ -15337,6 +18334,12 @@
                 "resolve_on_detour": {
                   "type": "boolean"
                 },
+<<<<<<< HEAD
+=======
+                "tcp_concurrent": {
+                  "type": "boolean"
+                },
+>>>>>>> michong/xiaobaf14g-testing
                 "server": {
                   "type": "string"
                 },
@@ -15463,6 +18466,12 @@
                 "tcp_keep_alive_count": {
                   "type": "integer"
                 },
+<<<<<<< HEAD
+=======
+                "udp_gso": {
+                  "type": "boolean"
+                },
+>>>>>>> michong/xiaobaf14g-testing
                 "udp_fragment": {
                   "type": "boolean"
                 },
@@ -15509,6 +18518,12 @@
                 "resolve_on_detour": {
                   "type": "boolean"
                 },
+<<<<<<< HEAD
+=======
+                "tcp_concurrent": {
+                  "type": "boolean"
+                },
+>>>>>>> michong/xiaobaf14g-testing
                 "server": {
                   "type": "string"
                 },
@@ -15635,6 +18650,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -15681,6 +18702,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -15826,6 +18853,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -15872,6 +18905,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -16099,6 +19138,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -16144,6 +19189,12 @@
             },
             "resolve_on_detour": {
               "type": "boolean"
+<<<<<<< HEAD
+=======
+            },
+            "tcp_concurrent": {
+              "type": "boolean"
+>>>>>>> michong/xiaobaf14g-testing
             }
           },
           "required": [
@@ -16219,6 +19270,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -16265,6 +19322,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "executable_path": {
               "type": "string"
             },
@@ -16357,6 +19420,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -16403,6 +19472,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -16518,6 +19593,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -16564,6 +19645,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -16698,6 +19785,82 @@
             "include": {
               "type": "string"
             },
+<<<<<<< HEAD
+=======
+            "include_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "exclude_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "include_transport": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "exclude_transport": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "network": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "tcp",
+                    "udp"
+                  ]
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "tcp",
+                      "udp"
+                    ]
+                  }
+                }
+              ]
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "use_all_providers": {
               "type": "boolean"
             },
@@ -16804,6 +19967,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -16850,6 +20019,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -16862,6 +20037,9 @@
               "type": "string"
             },
             "flow": {
+              "type": "string"
+            },
+            "encryption": {
               "type": "string"
             },
             "network": {
@@ -16971,6 +20149,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -17017,6 +20201,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -17153,6 +20343,21 @@
       },
       "additionalProperties": false
     },
+    "OutboundPTLSOptions": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "password": {
+          "type": "string"
+        },
+        "handshake_timeout": {
+          "$ref": "#/$defs/Duration"
+        }
+      },
+      "additionalProperties": false
+    },
     "OutboundRealityOptions": {
       "type": "object",
       "properties": {
@@ -17163,6 +20368,19 @@
           "type": "string"
         },
         "short_id": {
+          "type": "string"
+        },
+        "key_share": {
+          "type": "string",
+          "enum": [
+            "hybrid",
+            "classical"
+          ]
+        },
+        "mldsa65_verify": {
+          "type": "string"
+        },
+        "version": {
           "type": "string"
         }
       },
@@ -17418,6 +20636,9 @@
         },
         "reality": {
           "$ref": "#/$defs/OutboundRealityOptions"
+        },
+        "phantom": {
+          "$ref": "#/$defs/OutboundPTLSOptions"
         }
       },
       "additionalProperties": false
@@ -17454,11 +20675,45 @@
     "OverrideAnyTLSOptions": {
       "type": "object",
       "properties": {
+<<<<<<< HEAD
+=======
+        "use_anyx": {
+          "type": "boolean"
+        },
+>>>>>>> michong/xiaobaf14g-testing
         "client_metadata": {
           "type": "string"
         },
         "disable_reuse": {
           "type": "boolean"
+<<<<<<< HEAD
+=======
+        },
+        "padding_scheme": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "padding_scheme_interval": {
+          "$ref": "#/$defs/Duration"
+        },
+        "min_idle_session": {
+          "type": "integer"
+        },
+        "idle_session_timeout": {
+          "$ref": "#/$defs/Duration"
+        },
+        "idle_session_min_timeout": {
+          "$ref": "#/$defs/Duration"
+>>>>>>> michong/xiaobaf14g-testing
         }
       },
       "additionalProperties": false
@@ -17512,6 +20767,12 @@
         "tcp_keep_alive_interval": {
           "$ref": "#/$defs/Duration"
         },
+<<<<<<< HEAD
+=======
+        "udp_gso": {
+          "type": "boolean"
+        },
+>>>>>>> michong/xiaobaf14g-testing
         "udp_fragment": {
           "type": "boolean"
         },
@@ -17586,6 +20847,12 @@
         "config_path": {
           "type": "string"
         },
+<<<<<<< HEAD
+=======
+        "query_server_name": {
+          "type": "string"
+        },
+>>>>>>> michong/xiaobaf14g-testing
         "pq_signature_schemes_enabled": {
           "type": "boolean"
         },
@@ -17606,6 +20873,15 @@
         },
         "short_id": {
           "type": "string"
+<<<<<<< HEAD
+=======
+        },
+        "key_share": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+>>>>>>> michong/xiaobaf14g-testing
         }
       },
       "additionalProperties": false
@@ -17802,6 +21078,22 @@
       },
       "additionalProperties": false
     },
+<<<<<<< HEAD
+=======
+    "OverrideTransportOptions": {
+      "type": "object",
+      "properties": {
+        "xhttp_download_enabled": {
+          "type": "boolean"
+        },
+        "xhttp_download_detour": {
+          "type": "string",
+          "x-tag-reference": "outbound"
+        }
+      },
+      "additionalProperties": false
+    },
+>>>>>>> michong/xiaobaf14g-testing
     "OverrideUTLSOptions": {
       "type": "object",
       "properties": {
@@ -17869,6 +21161,12 @@
             },
             "override_anytls": {
               "$ref": "#/$defs/OverrideAnyTLSOptions"
+<<<<<<< HEAD
+=======
+            },
+            "override_transport": {
+              "$ref": "#/$defs/OverrideTransportOptions"
+>>>>>>> michong/xiaobaf14g-testing
             }
           },
           "required": [
@@ -17916,6 +21214,12 @@
                 },
                 "override_anytls": {
                   "$ref": "#/$defs/OverrideAnyTLSOptions"
+<<<<<<< HEAD
+=======
+                },
+                "override_transport": {
+                  "$ref": "#/$defs/OverrideTransportOptions"
+>>>>>>> michong/xiaobaf14g-testing
                 }
               },
               "required": [
@@ -17964,6 +21268,12 @@
                 },
                 "override_anytls": {
                   "$ref": "#/$defs/OverrideAnyTLSOptions"
+<<<<<<< HEAD
+=======
+                },
+                "override_transport": {
+                  "$ref": "#/$defs/OverrideTransportOptions"
+>>>>>>> michong/xiaobaf14g-testing
                 }
               },
               "required": [
@@ -18013,6 +21323,12 @@
                 },
                 "override_anytls": {
                   "$ref": "#/$defs/OverrideAnyTLSOptions"
+<<<<<<< HEAD
+=======
+                },
+                "override_transport": {
+                  "$ref": "#/$defs/OverrideTransportOptions"
+>>>>>>> michong/xiaobaf14g-testing
                 }
               },
               "required": [
@@ -18039,6 +21355,45 @@
         },
         "timeout": {
           "$ref": "#/$defs/Duration"
+<<<<<<< HEAD
+=======
+        },
+        "udp": {
+          "$ref": "#/$defs/ProviderUDPHealthCheckOptions"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ProviderUDPHealthCheckOptions": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "server": {
+          "type": "string"
+        },
+        "domain": {
+          "type": "string"
+        },
+        "timeout": {
+          "$ref": "#/$defs/Duration"
+        },
+        "ttl": {
+          "$ref": "#/$defs/Duration"
+        }
+      },
+      "additionalProperties": false
+    },
+    "QUICXUser": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+>>>>>>> michong/xiaobaf14g-testing
         }
       },
       "additionalProperties": false
@@ -18893,6 +22248,7 @@
           "type": "object",
           "properties": {
             "action": {
+<<<<<<< HEAD
               "const": "direct"
             },
             "bind_interface": {
@@ -19005,6 +22361,8 @@
           "type": "object",
           "properties": {
             "action": {
+=======
+>>>>>>> michong/xiaobaf14g-testing
               "const": "bypass"
             },
             "outbound": {
@@ -19486,6 +22844,9 @@
             "tcp_multi_path": {
               "type": "boolean"
             },
+            "udp_gso": {
+              "type": "boolean"
+            },
             "udp_fragment": {
               "type": "boolean"
             },
@@ -19626,6 +22987,9 @@
             "tcp_multi_path": {
               "type": "boolean"
             },
+            "udp_gso": {
+              "type": "boolean"
+            },
             "udp_fragment": {
               "type": "boolean"
             },
@@ -19721,6 +23085,9 @@
               "type": "boolean"
             },
             "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "udp_gso": {
               "type": "boolean"
             },
             "udp_fragment": {
@@ -19855,6 +23222,12 @@
                         "tcp_keep_alive_count": {
                           "type": "integer"
                         },
+<<<<<<< HEAD
+=======
+                        "udp_gso": {
+                          "type": "boolean"
+                        },
+>>>>>>> michong/xiaobaf14g-testing
                         "udp_fragment": {
                           "type": "boolean"
                         },
@@ -19901,6 +23274,12 @@
                         "resolve_on_detour": {
                           "type": "boolean"
                         },
+<<<<<<< HEAD
+=======
+                        "tcp_concurrent": {
+                          "type": "boolean"
+                        },
+>>>>>>> michong/xiaobaf14g-testing
                         "idle_timeout": {
                           "$ref": "#/$defs/Duration"
                         },
@@ -20043,6 +23422,12 @@
                           "tcp_keep_alive_count": {
                             "type": "integer"
                           },
+<<<<<<< HEAD
+=======
+                          "udp_gso": {
+                            "type": "boolean"
+                          },
+>>>>>>> michong/xiaobaf14g-testing
                           "udp_fragment": {
                             "type": "boolean"
                           },
@@ -20089,6 +23474,12 @@
                           "resolve_on_detour": {
                             "type": "boolean"
                           },
+<<<<<<< HEAD
+=======
+                          "tcp_concurrent": {
+                            "type": "boolean"
+                          },
+>>>>>>> michong/xiaobaf14g-testing
                           "idle_timeout": {
                             "$ref": "#/$defs/Duration"
                           },
@@ -20246,6 +23637,9 @@
                     "tcp_multi_path": {
                       "type": "boolean"
                     },
+                    "udp_gso": {
+                      "type": "boolean"
+                    },
                     "udp_fragment": {
                       "type": "boolean"
                     },
@@ -20328,6 +23722,9 @@
               "type": "boolean"
             },
             "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "udp_gso": {
               "type": "boolean"
             },
             "udp_fragment": {
@@ -20447,6 +23844,9 @@
               "type": "boolean"
             },
             "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "udp_gso": {
               "type": "boolean"
             },
             "udp_fragment": {
@@ -20589,6 +23989,9 @@
             "tcp_multi_path": {
               "type": "boolean"
             },
+            "udp_gso": {
+              "type": "boolean"
+            },
             "udp_fragment": {
               "type": "boolean"
             },
@@ -20666,6 +24069,9 @@
               "type": "boolean"
             },
             "tcp_multi_path": {
+              "type": "boolean"
+            },
+            "udp_gso": {
               "type": "boolean"
             },
             "udp_fragment": {
@@ -20770,6 +24176,12 @@
             "tcp_keep_alive_count": {
               "type": "integer"
             },
+<<<<<<< HEAD
+=======
+            "udp_gso": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "udp_fragment": {
               "type": "boolean"
             },
@@ -20816,6 +24228,12 @@
             "resolve_on_detour": {
               "type": "boolean"
             },
+<<<<<<< HEAD
+=======
+            "tcp_concurrent": {
+              "type": "boolean"
+            },
+>>>>>>> michong/xiaobaf14g-testing
             "server": {
               "type": "string"
             },
@@ -20900,6 +24318,9 @@
                   "type": "boolean"
                 },
                 "tcp_multi_path": {
+                  "type": "boolean"
+                },
+                "udp_gso": {
                   "type": "boolean"
                 },
                 "udp_fragment": {
@@ -20988,6 +24409,9 @@
                   "type": "boolean"
                 },
                 "tcp_multi_path": {
+                  "type": "boolean"
+                },
+                "udp_gso": {
                   "type": "boolean"
                 },
                 "udp_fragment": {
@@ -21087,6 +24511,12 @@
         "tcp_keep_alive_count": {
           "type": "integer"
         },
+<<<<<<< HEAD
+=======
+        "udp_gso": {
+          "type": "boolean"
+        },
+>>>>>>> michong/xiaobaf14g-testing
         "udp_fragment": {
           "type": "boolean"
         },
@@ -21132,6 +24562,12 @@
         },
         "resolve_on_detour": {
           "type": "boolean"
+<<<<<<< HEAD
+=======
+        },
+        "tcp_concurrent": {
+          "type": "boolean"
+>>>>>>> michong/xiaobaf14g-testing
         }
       },
       "additionalProperties": false
@@ -21211,7 +24647,11 @@
           "type": "string"
         },
         "size_limit_mb": {
+<<<<<<< HEAD
           "type": "integer"
+=======
+          "type": "number"
+>>>>>>> michong/xiaobaf14g-testing
         }
       },
       "additionalProperties": false
@@ -21593,10 +25033,10 @@
     "User": {
       "type": "object",
       "properties": {
-        "Username": {
+        "username": {
           "type": "string"
         },
-        "Password": {
+        "password": {
           "type": "string"
         }
       },

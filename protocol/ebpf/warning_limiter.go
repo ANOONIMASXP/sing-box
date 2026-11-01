@@ -136,6 +136,7 @@ type interfaceWarningLimiters struct {
 	defaultInterfaceState stateTracker
 	topology              warningLimiter
 	infrastructure        warningLimiter
+	redirectRoutes        warningLimiter
 	hostPolicy            warningLimiter
 	reconcile             warningLimiter
 	fakeIPICMPRoute       warningLimiter

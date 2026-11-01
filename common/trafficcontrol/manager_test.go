@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
-	"github.com/sagernet/sing-box/log"
+	"github.com/sagernet/sing/common/logger"
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/require"
@@ -29,7 +29,7 @@ func (t *testTracker) Close() error {
 func TestClosedConnectionsLimit(t *testing.T) {
 	manager := NewManager()
 	manager.SetClosedConnectionsTTL(time.Hour)
-	scope := adapter.NewScope(context.Background(), log.NewNOPFactory().Logger())
+	scope := adapter.NewScope(context.Background(), logger.NOP())
 	t.Cleanup(func() { require.NoError(t, scope.Close()) })
 	require.NoError(t, manager.Start(adapter.StartStateInitialize, scope))
 	manager.SetClosedConnectionsLimit(2)
@@ -73,7 +73,7 @@ func TestClosedConnectionsLimit(t *testing.T) {
 
 func TestConnectionEvents(t *testing.T) {
 	manager := NewManager()
-	scope := adapter.NewScope(context.Background(), log.NewNOPFactory().Logger())
+	scope := adapter.NewScope(context.Background(), logger.NOP())
 	t.Cleanup(func() { require.NoError(t, scope.Close()) })
 	require.NoError(t, manager.Start(adapter.StartStateInitialize, scope))
 	subscription, _, err := manager.SubscribeEvents()
@@ -130,7 +130,7 @@ func TestClosedConnectionsTTLCleanup(t *testing.T) {
 
 func TestClosedConnectionsGCCleanupWithoutTTL(t *testing.T) {
 	manager := NewManager()
-	scope := adapter.NewScope(context.Background(), log.NewNOPFactory().Logger())
+	scope := adapter.NewScope(context.Background(), logger.NOP())
 	t.Cleanup(func() { require.NoError(t, scope.Close()) })
 	require.NoError(t, manager.Start(adapter.StartStateInitialize, scope))
 	tracker := &testTracker{metadata: TrackerMetadata{

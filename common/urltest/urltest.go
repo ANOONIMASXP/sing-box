@@ -71,16 +71,22 @@ func StatusMatcherFromContext(ctx context.Context) *StatusMatcher {
 
 // ════════════════ HistoryStorage ════════════════
 
-var _ adapter.URLTestHistoryStorage = (*HistoryStorage)(nil)
+var (
+	_ adapter.URLTestHistoryStorage = (*HistoryStorage)(nil)
+	_ adapter.UDPTestHistoryStorage = (*HistoryStorage)(nil)
+)
 
 type HistoryStorage struct {
 	delayHistory sync.Map
+	udpHistory   sync.Map
 	updateHooks  []*observable.Subscriber[struct{}]
 	hookAccess   sync.Mutex
 
 	notifyAccess  sync.Mutex
 	notifyPending bool
 	lastNotify    time.Time
+
+	prober Prober
 }
 
 // historyNotifyInterval coalesces store/delete notifications: a health
@@ -88,7 +94,15 @@ type HistoryStorage struct {
 // subscribers (reference tracking, dashboard pushes) walk all outbounds.
 const historyNotifyInterval = 200 * time.Millisecond
 
+// DefaultLink is probed when no URL is configured.
+const DefaultLink = "https://www.gstatic.com/generate_204"
+
 func NewHistoryStorage() *HistoryStorage { return &HistoryStorage{} }
+
+// Prober shares probes between everything measuring through this storage.
+func (s *HistoryStorage) Prober() *Prober {
+	return &s.prober
+}
 
 func (s *HistoryStorage) AddUpdateHook(hook *observable.Subscriber[struct{}]) {
 	s.hookAccess.Lock()
@@ -123,6 +137,27 @@ func (s *HistoryStorage) DeleteURLTestHistory(tag string) {
 
 func (s *HistoryStorage) StoreURLTestHistory(tag string, h *adapter.URLTestHistory) {
 	s.delayHistory.Store(tag, h)
+	s.notifyUpdated()
+}
+
+func (s *HistoryStorage) LoadUDPTestHistory(tag string) *adapter.UDPTestHistory {
+	if s == nil {
+		return nil
+	}
+	v, ok := s.udpHistory.Load(tag)
+	if !ok {
+		return nil
+	}
+	return v.(*adapter.UDPTestHistory)
+}
+
+func (s *HistoryStorage) StoreUDPTestHistory(tag string, h *adapter.UDPTestHistory) {
+	s.udpHistory.Store(tag, h)
+	s.notifyUpdated()
+}
+
+func (s *HistoryStorage) DeleteUDPTestHistory(tag string) {
+	s.udpHistory.Delete(tag)
 	s.notifyUpdated()
 }
 

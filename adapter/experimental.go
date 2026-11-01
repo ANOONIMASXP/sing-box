@@ -31,6 +31,30 @@ type URLTestHistoryStorage interface {
 	Close() error
 }
 
+// UDPTestHistory is the result of a UDP probe through an outbound, see
+// health_check.udp of providers.
+type UDPTestHistory struct {
+	Time time.Time `json:"time"`
+	// Expire is when the result stops counting; an expired result means the
+	// UDP support of the outbound is unknown again.
+	Expire time.Time `json:"expire"`
+	Delay  uint16    `json:"delay"`
+	Error  string    `json:"error,omitempty"`
+}
+
+// Failed reports whether the probe failed and its result is still valid.
+func (h *UDPTestHistory) Failed(now time.Time) bool {
+	return h != nil && h.Error != "" && now.Before(h.Expire)
+}
+
+// UDPTestHistoryStorage is implemented by URL test history storages that also
+// keep UDP probe results.
+type UDPTestHistoryStorage interface {
+	LoadUDPTestHistory(tag string) *UDPTestHistory
+	StoreUDPTestHistory(tag string, history *UDPTestHistory)
+	DeleteUDPTestHistory(tag string)
+}
+
 type V2RayServer interface {
 	LifecycleService
 	StatsService() ConnectionTracker
@@ -122,7 +146,6 @@ type CacheFile interface {
 	SaveSubscription(tag string, sub *SavedBinary) error
 
 	SmartDB() *bbolt.DB
-
 }
 
 type SavedBinary struct {
@@ -274,8 +297,9 @@ type DialingOutboundGroup interface {
 }
 
 // ConnectionFailureListener is notified when dialing a resolved outbound chain fails.
+// member is the outbound the group resolved to (the next one in the chain), or nil.
 type ConnectionFailureListener interface {
-	OnConnectionFailure(ctx context.Context)
+	OnConnectionFailure(ctx context.Context, member Outbound)
 }
 
 type PreMatchOutboundGroup interface {

@@ -656,17 +656,17 @@ func (i *Inbound) updateTCInterfaces(ctx context.Context) (outcome tcUpdateOutco
 		return
 	}
 	if localSocketAssignEnabled && localInterface == "" {
-		message := []any{"eBPF TC local path waiting for default interface; retaining current attachment state"}
-		i.interfaceWarnings.defaultInterface.record(time.Now(), message...)
-		previous, changed := i.interfaceWarnings.defaultInterfaceState.transition("unavailable")
-		// The first wait at startup is normal (the default interface often
-		// appears shortly after; on Android it can lag behind netd). Only
-		// warn when a previously available interface is lost.
-		if changed && previous != "" {
-			i.logger.Warn("eBPF ", ebpfStructuredEvent("tc_local_waiting", map[string]any{
-				"state":  "waiting_for_interface",
-				"reason": "default_interface_unavailable",
-			}))
+		// While local TC is still waiting for its first default interface the
+		// startup path owns that state; do not report it as a lost interface.
+		if !i.localTCAwaitingInterface.Load() {
+			message := []any{"eBPF TC local path waiting for default interface; retaining current attachment state"}
+			i.interfaceWarnings.defaultInterface.record(time.Now(), message...)
+			if _, changed := i.interfaceWarnings.defaultInterfaceState.transition("unavailable"); changed {
+				i.logger.Warn("eBPF ", ebpfStructuredEvent("tc_local_waiting", map[string]any{
+					"state":  "waiting_for_interface",
+					"reason": "default_interface_unavailable",
+				}))
+			}
 		}
 	} else if localSocketAssignEnabled {
 		previous, changed := i.interfaceWarnings.defaultInterfaceState.transition("available")
@@ -717,6 +717,13 @@ func (i *Inbound) updateTCInterfaces(ctx context.Context) (outcome tcUpdateOutco
 		i.interfaceWarnings.infrastructure.warn(i.logger, "repair TC eBPF network state: ", err)
 		outcome.general = tcSharedRewriteRecoverable
 	}
+	redirectRoutesChanged, err := i.reconcileRedirectInterfaceRoutes()
+	if err != nil {
+		i.interfaceWarnings.redirectRoutes.warn(i.logger, "refresh eBPF redirect routes for bound sockets: ", err)
+		outcome.general = tcSharedRewriteRecoverable
+	} else if redirectRoutesChanged {
+		i.logger.Debug("eBPF redirect routes for bound sockets updated")
+	}
 	changed, err := i.tcAttachmentStateChanged(localInterface, tcSharedInterfaces)
 	if err != nil {
 		i.interfaceWarnings.topology.warn(i.logger, "inspect TC eBPF interfaces: ", err)
@@ -747,6 +754,9 @@ func (i *Inbound) updateTCInterfaces(ctx context.Context) (outcome tcUpdateOutco
 		i.interfaceWarnings.reconcile.warn(i.logger, "refresh TC eBPF interfaces: ", err)
 		outcome.general = tcSharedRewriteRecoverable
 		return
+	}
+	if localInterface != "" && i.localTCAwaitingInterface.CompareAndSwap(true, false) {
+		i.logger.Info("local TC eBPF interception started on default interface ", localInterface)
 	}
 	i.warnIfLocalFakeIPICMPIPv6Unroutable(localInterface)
 	if err = i.updateCgroupHostAddresses(hostAddresses); err != nil {

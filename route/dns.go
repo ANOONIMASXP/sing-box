@@ -67,9 +67,16 @@ func (r *Router) HijackDNSPacket(ctx context.Context, payload []byte, writer N.P
 		if exchangeErr == nil {
 			exchangeErr = r.writeDNSPacketResponse(&message, response, writer, destination)
 		}
-		if exchangeErr != nil && !R.IsRejected(exchangeErr) && !E.IsClosedOrCanceled(exchangeErr) {
-			r.logger.ErrorContext(ctx, E.Cause(exchangeErr, "process DNS packet"))
+		if exchangeErr == nil || R.IsRejected(exchangeErr) || E.IsClosedOrCanceled(exchangeErr) {
+			return
 		}
+		if isTransientUnreachable(exchangeErr) {
+			if transientDNSLogThrottle.allow() {
+				r.logger.DebugContext(ctx, E.Cause(exchangeErr, "process DNS packet (transient, auto-retry)"))
+			}
+			return
+		}
+		r.logger.ErrorContext(ctx, E.Cause(exchangeErr, "process DNS packet"))
 	})
 }
 

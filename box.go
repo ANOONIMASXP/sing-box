@@ -62,9 +62,9 @@ type Box struct {
 	referenceManager    *route.ReferenceManager
 	httpClientService   adapter.LifecycleService
 	internalService     []adapter.LifecycleService
+	reloadChan          chan struct{}
 	ntpService          *ntp.Service
 	scope               *adapter.Scope
-	reloadChan          chan struct{}
 }
 
 type Options struct {
@@ -127,6 +127,7 @@ func New(options Options) (*Box, error) {
 		ctx = context.Background()
 	}
 	ctx = service.ContextWithDefaultRegistry(ctx)
+	ctx = option.ContextWithRemoteFetchPolicy(ctx, options.RemoteFetchPolicy())
 
 	endpointRegistry := service.FromContext[adapter.EndpointRegistry](ctx)
 	inboundRegistry := service.FromContext[adapter.InboundRegistry](ctx)
@@ -225,13 +226,19 @@ func New(options Options) (*Box, error) {
 	service.MustRegister[adapter.NetworkNamespaceManager](ctx, netnsManager)
 	internalServices = append(internalServices, netnsManager)
 	dnsOptions := common.PtrValueOrDefault(options.DNS)
+	// Registered even when disabled, so the Clash API can enable it at runtime.
+	tcpConcurrent, err := dialer.NewTCPConcurrent(logFactory.NewLogger("tcp-concurrent"), dnsOptions.TCPConcurrent)
+	if err != nil {
+		return nil, err
+	}
+	service.MustRegisterPtr(ctx, tcpConcurrent)
 	endpointManager := endpoint.NewManager(endpointRegistry)
 	inboundManager := inbound.NewManager(inboundRegistry, endpointManager)
 	outboundManager := outbound.NewManager(outboundRegistry, endpointManager, routeOptions.Final)
+	providerManager := provider.NewManager(ctx, logFactory.NewLogger("provider"), providerRegistry)
 	dnsTransportManager := dns.NewTransportManager(dnsTransportRegistry, outboundManager, dnsOptions.Final)
 	serviceManager := boxService.NewManager(serviceRegistry)
 	certificateProviderManager := boxCertificate.NewManager(certificateProviderRegistry)
-	providerManager := provider.NewManager(ctx, logFactory.NewLogger("provider"), providerRegistry)
 	service.MustRegister[adapter.EndpointManager](ctx, endpointManager)
 	service.MustRegister[adapter.InboundManager](ctx, inboundManager)
 	service.MustRegister[adapter.OutboundManager](ctx, outboundManager)
@@ -245,7 +252,7 @@ func New(options Options) (*Box, error) {
 	}
 	service.MustRegister[adapter.DNSRouter](ctx, dnsRouter)
 	service.MustRegister[adapter.DNSRuleSetUpdateValidator](ctx, dnsRouter)
-	connectionManager := route.NewConnectionManager(logFactory.NewLogger("connection"))
+	connectionManager := route.NewConnectionManager(ctx, logFactory.NewLogger("connection"))
 	service.MustRegister[adapter.ConnectionManager](ctx, connectionManager)
 	networkManager, err := route.NewNetworkManager(ctx, logFactory.NewLogger("network"), routeOptions, dnsOptions)
 	if err != nil {
@@ -258,7 +265,7 @@ func New(options Options) (*Box, error) {
 			_ = scope.Close()
 		}
 	}()
-	if err = dialer.PrepareEBPFSelfBypass(networkManager, options.Inbounds, scope); err != nil {
+	if err = dialer.PrepareEBPFSelfBypass(networkManager, options.Inbounds); err != nil {
 		return nil, E.Cause(err, "prepare eBPF self-bypass")
 	}
 	service.MustRegister[adapter.NetworkManager](ctx, networkManager)
@@ -657,8 +664,8 @@ func (s *Box) preStart() error {
 		boxComponent{"connection", s.connection},
 		boxComponent{"router", s.router},
 		boxComponent{"outbound", s.outbound},
-		boxComponent{"endpoint", s.endpoint},
 		boxComponent{"provider", s.provider},
+		boxComponent{"endpoint", s.endpoint},
 		boxComponent{"certificate-provider", s.certificateProvider},
 		boxComponent{"inbound", s.inbound},
 		boxComponent{"service", s.service},
@@ -736,8 +743,8 @@ func (s *Box) start() error {
 		boxComponent{"connection", s.connection},
 		boxComponent{"router", s.router},
 		boxComponent{"outbound", s.outbound},
-		boxComponent{"endpoint", s.endpoint},
 		boxComponent{"provider", s.provider},
+		boxComponent{"endpoint", s.endpoint},
 		boxComponent{"certificate-provider", s.certificateProvider},
 		boxComponent{"inbound", s.inbound},
 		boxComponent{"service", s.service},

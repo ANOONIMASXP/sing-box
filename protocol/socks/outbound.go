@@ -3,6 +3,7 @@ package socks
 import (
 	"context"
 	"net"
+	"net/netip"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
@@ -34,6 +35,7 @@ type Outbound struct {
 	resolve              bool
 	innerDNSQueryOptions adapter.DNSQueryOptions
 	uotClient            *uot.Client
+	tcpConcurrent        dialer.TCPConcurrentPolicy
 }
 
 func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.SOCKSOutboundOptions) (adapter.Outbound, error) {
@@ -47,17 +49,28 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 	if err != nil {
 		return nil, err
 	}
+	networks := options.Network.Build()
+	if version != socks.Version5 && !common.PtrValueOrDefault(options.UDPOverTCP).Enabled {
+		// SOCKS4 and SOCKS4a only define CONNECT, so UDP needs UDP over TCP.
+		if options.Network != "" && common.Contains(networks, N.NetworkUDP) {
+			return nil, E.New("SOCKS", version, " does not support UDP, enable udp_over_tcp or set network to tcp")
+		}
+		networks = common.Filter(networks, func(it string) bool {
+			return it != N.NetworkUDP
+		})
+	}
 	outboundDialer, err := dialer.New(ctx, options.DialerOptions, options.ServerIsDomain())
 	if err != nil {
 		return nil, err
 	}
 	outbound := &Outbound{
-		Adapter:   outbound.NewAdapterWithDialerOptions(C.TypeSOCKS, tag, options.Network.Build(), options.DialerOptions),
+		Adapter:   outbound.NewAdapterWithDialerOptions(C.TypeSOCKS, tag, networks, options.DialerOptions),
 		dnsRouter: service.FromContext[adapter.DNSRouter](ctx),
 		logger:    logger,
 		client:    socks.NewClient(outboundDialer, options.ServerOptions.Build(), version, options.Username, options.Password),
 		resolve:   version == socks.Version4,
 	}
+	outbound.tcpConcurrent = dialer.NewProxyTCPConcurrentPolicy(ctx, options.TCPConcurrent)
 	if version == socks.Version4 && options.InnerDomainResolver != nil {
 		innerDNSOpts, err := dialer.NewInnerDNSQueryOptions(ctx, options.InnerDomainResolver)
 		if err != nil {
@@ -96,9 +109,23 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 		if err != nil {
 			return nil, err
 		}
-		return N.DialSerial(ctx, h.client, network, destination, destinationAddresses)
+		return dialer.DialSerialConcurrent(ctx, h.tcpConcurrent, h.client, network, destination, destinationAddresses)
 	}
 	return h.client.DialContext(ctx, network, destination)
+}
+
+// DialParallel connects to route-resolved addresses through the server, racing
+// them when the outbound sets tcp_concurrent: the race needs a server that
+// replies to CONNECT only once it reached the destination.
+func (h *Outbound) DialParallel(ctx context.Context, network string, destination M.Socksaddr, destinationAddresses []netip.Addr) (net.Conn, error) {
+	if N.NetworkName(network) != N.NetworkTCP {
+		return dialer.DialEach(ctx, h, network, destination, destinationAddresses)
+	}
+	ctx, metadata := adapter.ExtendContext(ctx)
+	metadata.Outbound = h.Tag()
+	metadata.Destination = destination
+	h.logger.InfoContext(ctx, "outbound connection to ", destination)
+	return dialer.DialSerialConcurrent(ctx, h.tcpConcurrent, h.client, network, destination, destinationAddresses)
 }
 
 func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {

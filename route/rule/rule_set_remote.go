@@ -28,6 +28,11 @@ import (
 	"github.com/sagernet/sing/service/pause"
 )
 
+const (
+	ruleSetFetchTimeout     = 60 * time.Second
+	ruleSetMaxResponseBytes = 50 * 1024 * 1024
+)
+
 var _ adapter.RuleSet = (*RemoteRuleSet)(nil)
 
 type RemoteRuleSet struct {
@@ -91,7 +96,7 @@ func NewRemoteRuleSet(ctx context.Context, logger logger.ContextLogger, tag stri
 }
 
 func (s *RemoteRuleSet) String() string {
-	return strings.Join(F.MapToString(s.rules), " ")
+	return strings.Join(F.MapToString(s.loadRules()), " ")
 }
 
 func (s *RemoteRuleSet) StartContext(ctx context.Context, startContext *adapter.HTTPStartContext) error {
@@ -125,9 +130,16 @@ func (s *RemoteRuleSet) StartContext(ctx context.Context, startContext *adapter.
 	if !loadedFromCache && !loadedFromInitialPath {
 		err = s.fetch(ctx, true)
 		if err != nil {
-			return E.Cause(err, "initial rule-set: ", s.tag)
+			if option.RemoteFetchPolicyFromContext(s.ctx).ForceFetch {
+				return E.Cause(err, "initial rule-set: ", s.tag)
+			}
+			s.logger.Warn(E.Cause(err, "initial rule-set fetch failed, starting empty: ", s.tag))
 		}
 	}
+	return nil
+}
+
+func (s *RemoteRuleSet) PostStart() error {
 	return nil
 }
 
@@ -137,7 +149,7 @@ func (s *RemoteRuleSet) update() {
 	if err != nil {
 		s.logger.ErrorContext(ctx, "fetch rule-set ", s.tag, ": ", err)
 	} else if s.refs.Load() == 0 {
-		s.rules = nil
+		s.dropRules()
 	}
 }
 
@@ -146,7 +158,7 @@ func (s *RemoteRuleSet) Update(ctx context.Context) error {
 	if err != nil {
 		return err
 	} else if s.refs.Load() == 0 {
-		s.rules = nil
+		s.dropRules()
 	}
 	return nil
 }
@@ -192,9 +204,14 @@ func (s *RemoteRuleSet) fetch(ctx context.Context, isStart bool) error {
 	default:
 		return E.New("unexpected status: ", response.Status)
 	}
-	content, err := io.ReadAll(response.Body)
+	// LimitReader 多读 1 字节用于判定是否超限。无 cap 的 io.ReadAll 会让恶意源
+	// 通过 chunked 编码持续 grow 内部 buffer 直到 OOM。
+	content, err := io.ReadAll(io.LimitReader(response.Body, ruleSetMaxResponseBytes+1))
 	if err != nil {
 		return err
+	}
+	if len(content) > ruleSetMaxResponseBytes {
+		return E.New("rule-set response too large: ", len(content), " > ", ruleSetMaxResponseBytes)
 	}
 	err = s.loadBytes(content, s)
 	if err != nil {
@@ -234,7 +251,7 @@ func (s *RemoteRuleSet) resolveTransport() (adapter.HTTPTransport, error) {
 	httpClientManager := service.FromContext[adapter.HTTPClientManager](s.ctx)
 	if s.options.HTTPClient != nil && !s.options.HTTPClient.IsEmpty() {
 		if s.options.DownloadDetour != "" { //nolint:staticcheck
-			return nil, E.New("http_client conflicts with deprecated download_detour field")
+			return nil, E.New("http_client is conflict with deprecated download_detour field")
 		}
 		return httpClientManager.ResolveTransport(s.ctx, s.logger, *s.options.HTTPClient)
 	}
@@ -259,11 +276,17 @@ func (s *RemoteRuleSet) loadCacheFile() (bool, error) {
 	var lastUpdated time.Time
 	var lastEtag string
 	var savedSet *adapter.SavedBinary
+	var staleRecord bool
+	var urlChanged bool
 	if s.cacheFile != nil {
 		if savedSet = s.cacheFile.LoadRuleSet(s.tag); savedSet != nil {
 			if len(savedSet.URLHash) > 0 && !bytes.Equal(savedSet.URLHash, s.urlHash[:]) {
-				s.logger.Info("cached rule-set was downloaded from another URL, will refetch")
-				return false, nil
+				if option.RemoteFetchPolicyFromContext(s.ctx).Verify || s.path == "" {
+					s.logger.Info("cached rule-set was downloaded from another URL, will refetch")
+					return false, nil
+				}
+				// remote_verify disabled: keep the local file and record the new URL.
+				urlChanged = true
 			}
 			s.hash = savedSet.Hash
 		}
@@ -293,14 +316,18 @@ func (s *RemoteRuleSet) loadCacheFile() (bool, error) {
 		if closeErr != nil {
 			return false, closeErr
 		}
-		if savedSet != nil {
-			if !s.hash.Equal(hash.MakeHash(content)) {
-				return false, E.New("load rule-set cache file failed: validation failed")
-			}
+		fileHash := hash.MakeHash(content)
+		if savedSet != nil && s.hash.Equal(fileHash) && !urlChanged {
 			lastUpdated = savedSet.LastUpdated
 			lastEtag = savedSet.LastEtag
 		} else {
+			// The file was replaced without this cache record (another core
+			// version sharing the directory, or an external edit). Load the file
+			// itself; its modification time drives the next update and the
+			// record's ETag no longer describes it.
 			lastUpdated = info.ModTime()
+			s.hash = fileHash
+			staleRecord = savedSet != nil
 		}
 	} else if savedSet != nil && len(savedSet.Content) > 0 {
 		content = savedSet.Content
@@ -314,6 +341,17 @@ func (s *RemoteRuleSet) loadCacheFile() (bool, error) {
 	}
 	s.setUpdatedTime(lastUpdated)
 	s.lastEtag = lastEtag
+	if staleRecord {
+		s.logger.Info("rule-set file ", s.path, " changed since it was cached, loaded it from disk")
+		err := s.cacheFile.SaveRuleSet(s.tag, &adapter.SavedBinary{
+			Hash:        s.hash,
+			LastUpdated: lastUpdated,
+			URLHash:     s.urlHash[:],
+		})
+		if err != nil {
+			s.logger.Error("save rule-set cache: ", err)
+		}
+	}
 	return true, nil
 }
 
@@ -346,7 +384,7 @@ func (s *RemoteRuleSet) saveCacheFile(content []byte) error {
 }
 
 func (s *RemoteRuleSet) Close() error {
-	s.rules = nil
+	s.clearRules()
 	s.cancel()
 	return nil
 }

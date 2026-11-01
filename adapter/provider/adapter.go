@@ -10,9 +10,12 @@ import (
 	"github.com/sagernet/sing-box/common/urltest"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/batch"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
+	M "github.com/sagernet/sing/common/metadata"
+	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/x/list"
 	"github.com/sagernet/sing/service"
 )
@@ -47,6 +50,49 @@ type Adapter struct {
 	enabled  bool
 	timeout  time.Duration
 	interval time.Duration
+
+	udp *udpHealthCheck
+
+	updateAccess sync.Mutex
+	pendingOut   []option.Outbound
+	pendingEP    []option.Endpoint
+}
+
+// udpHealthCheck probes the real UDP support of the provider nodes on every
+// health check round.
+type udpHealthCheck struct {
+	server  M.Socksaddr
+	domain  string
+	timeout time.Duration
+	ttl     time.Duration
+}
+
+func newUDPHealthCheck(options *option.ProviderUDPHealthCheckOptions, interval time.Duration) *udpHealthCheck {
+	if options == nil || !options.Enabled {
+		return nil
+	}
+	serverString := options.Server
+	if serverString == "" {
+		serverString = urltest.DefaultUDPTestServer
+	}
+	server := M.ParseSocksaddr(serverString)
+	if server.Port == 0 {
+		server.Port = 53
+	}
+	domain := options.Domain
+	if domain == "" {
+		domain = urltest.DefaultUDPTestDomain
+	}
+	timeout := time.Duration(options.Timeout)
+	if timeout == 0 {
+		timeout = 5 * time.Second
+	}
+	ttl := time.Duration(options.TTL)
+	if ttl == 0 {
+		// survives two missed rounds before falling back to "unknown"
+		ttl = 3 * interval
+	}
+	return &udpHealthCheck{server: server, domain: domain, timeout: timeout, ttl: ttl}
 }
 
 func NewAdapter(ctx context.Context, router adapter.Router, outbound adapter.OutboundManager, endpoint adapter.EndpointManager, logFactory log.Factory, logger log.ContextLogger, providerTag string, providerType string, options option.ProviderHealthCheckOptions) Adapter {
@@ -81,6 +127,7 @@ func NewAdapter(ctx context.Context, router adapter.Router, outbound adapter.Out
 		link:     options.URL,
 		timeout:  timeout,
 		interval: interval,
+		udp:      newUDPHealthCheck(options.UDP, interval),
 	}
 }
 
@@ -89,7 +136,7 @@ func (a *Adapter) Start() error {
 	if a.history == nil {
 		return E.New("missing URL test history storage")
 	}
-	if a.enabled {
+	if a.enabled || a.udp != nil {
 		a.ticker = time.NewTicker(a.interval)
 		a.run(a.loopCheck)
 	}
@@ -151,6 +198,33 @@ func (a *Adapter) HealthCheck(ctx context.Context) (map[string]uint16, error) {
 		a.ticker.Reset(a.interval)
 	}
 	return a.healthcheck(ctx)
+}
+
+// UpdateOutbounds and UpdateEndpoints apply a provider reload. The provider
+// implementations hand over the two lists in sequence; both land in the
+// adapter and a single ordered UpdateNodes pass runs after each hand-off, so
+// a subscription can introduce a detour and its users in either order.
+func (a *Adapter) UpdateOutbounds(_ []option.Outbound, newOpts []option.Outbound) {
+	a.updateAccess.Lock()
+	a.pendingOut = newOpts
+	a.updateAccess.Unlock()
+	a.applyPendingUpdate()
+}
+
+func (a *Adapter) UpdateEndpoints(_ []option.Endpoint, newOpts []option.Endpoint) {
+	a.updateAccess.Lock()
+	a.pendingEP = newOpts
+	a.updateAccess.Unlock()
+	a.applyPendingUpdate()
+}
+
+func (a *Adapter) applyPendingUpdate() {
+	a.updateAccess.Lock()
+	outOpts, epOpts := a.pendingOut, a.pendingEP
+	a.updateAccess.Unlock()
+	if err := a.UpdateNodes(outOpts, epOpts); err != nil {
+		a.logger.Warn(err)
+	}
 }
 
 func (a *Adapter) RegisterCallback(callback adapter.ProviderUpdateCallback) *list.Element[adapter.ProviderUpdateCallback] {
@@ -232,7 +306,10 @@ func (a *Adapter) healthcheck(ctx context.Context) (map[string]uint16, error) {
 	defer a.checking.Store(false)
 	outbounds := a.Outbounds()
 	b, _ := batch.New(ctx, batch.WithConcurrencyNum[any](10))
-	var resultAccess sync.Mutex
+	var (
+		resultAccess sync.Mutex
+		udpChanged   atomic.Bool
+	)
 	checked := make(map[string]bool)
 	for _, detour := range outbounds {
 		tag := detour.Tag()
@@ -241,27 +318,74 @@ func (a *Adapter) healthcheck(ctx context.Context) (map[string]uint16, error) {
 		}
 		checked[tag] = true
 		b.Go(tag, func() (any, error) {
-			ctx, cancel := context.WithTimeout(a.ctx, a.timeout)
-			defer cancel()
-			t, err := urltest.URLTest(ctx, a.link, detour)
-			if err != nil {
-				a.logger.Debug("outbound ", tag, " unavailable: ", err)
-				a.history.DeleteURLTestHistory(tag)
-			} else {
-				a.logger.Debug("outbound ", tag, " available: ", t, "ms")
-				a.history.StoreURLTestHistory(tag, &adapter.URLTestHistory{
-					Time:  time.Now(),
-					Delay: t,
-				})
-				resultAccess.Lock()
-				result[tag] = t
-				resultAccess.Unlock()
+			if a.enabled {
+				ctx, cancel := context.WithTimeout(a.ctx, a.timeout)
+				t, err := urltest.URLTest(ctx, a.link, detour)
+				cancel()
+				if err != nil {
+					a.logger.Debug("outbound ", tag, " unavailable: ", err)
+					a.history.DeleteURLTestHistory(tag)
+				} else {
+					a.logger.Debug("outbound ", tag, " available: ", t, "ms")
+					a.history.StoreURLTestHistory(tag, &adapter.URLTestHistory{
+						Time:  time.Now(),
+						Delay: t,
+					})
+					resultAccess.Lock()
+					result[tag] = t
+					resultAccess.Unlock()
+				}
+			}
+			if a.udp != nil && a.udpCheck(detour) {
+				udpChanged.Store(true)
 			}
 			return nil, nil
 		})
 	}
 	b.Wait()
+	if udpChanged.Load() {
+		// groups filtering on network: udp drop or restore members
+		a.UpdateGroups()
+	}
 	return result, nil
+}
+
+// udpCheck probes one outbound and reports whether its UDP availability, as
+// groups see it, changed.
+func (a *Adapter) udpCheck(detour adapter.Outbound) bool {
+	if !common.Contains(detour.Network(), N.NetworkUDP) {
+		return false
+	}
+	udpHistory := adapter.UDPTestHistoryStorage(a.history)
+	tag := detour.Tag()
+	now := time.Now()
+	wasFailed := udpHistory.LoadUDPTestHistory(tag).Failed(now)
+	ctx, cancel := context.WithTimeout(a.ctx, a.udp.timeout)
+	delay, err := urltest.UDPTest(ctx, detour, a.udp.server, a.udp.domain)
+	cancel()
+	if a.ctx.Err() != nil {
+		// closing, not a verdict on the node
+		return false
+	}
+	now = time.Now()
+	history := &adapter.UDPTestHistory{Time: now, Expire: now.Add(a.udp.ttl), Delay: delay}
+	if err != nil {
+		history.Error = err.Error()
+	}
+	udpHistory.StoreUDPTestHistory(tag, history)
+	isFailed := history.Failed(now)
+	if isFailed != wasFailed {
+		if isFailed {
+			a.logger.Info("outbound ", tag, " does not relay UDP: ", err)
+		} else {
+			a.logger.Info("outbound ", tag, " relays UDP again: ", delay, "ms")
+		}
+	} else if err != nil {
+		a.logger.Debug("outbound ", tag, " UDP unavailable: ", err)
+	} else {
+		a.logger.Debug("outbound ", tag, " UDP available: ", delay, "ms")
+	}
+	return isFailed != wasFailed
 }
 
 func (a *Adapter) RewriteDetourForProvider(opts []option.Outbound, endpointOpts ...[]option.Endpoint) {

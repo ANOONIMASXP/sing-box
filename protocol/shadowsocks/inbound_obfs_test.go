@@ -29,8 +29,6 @@ func TestInboundSimpleObfs(t *testing.T) {
 			t.Run(kind+"/"+mode, func(t *testing.T) {
 				ctx := context.Background()
 				logger := log.NewNOPFactory().NewLogger("test")
-				scope := adapter.NewScope(ctx, logger)
-				t.Cleanup(func() { require.NoError(t, scope.Close()) })
 				options := option.ShadowsocksInboundOptions{
 					ListenOptions: option.ListenOptions{Listen: common.Ptr(badoption.Addr(netip.MustParseAddr("127.0.0.1")))},
 					Network:       N.NetworkTCP,
@@ -76,7 +74,6 @@ func TestInboundSimpleObfs(t *testing.T) {
 				if kind == "relay" {
 					backend, err := NewInbound(ctx, echoRouter, logger, "backend", option.ShadowsocksInboundOptions{Method: options.Method, Password: userKey})
 					require.NoError(t, err)
-					require.NoError(t, backend.Start(adapter.StartStateInitialize, scope))
 					router = &obfsTestRouter{route: func(ctx context.Context, conn net.Conn, metadata adapter.InboundContext) error {
 						relayRouted <- metadata
 						backend.(adapter.TCPInjectableInbound).NewConnection(ctx, conn, metadata, nil)
@@ -85,7 +82,8 @@ func TestInboundSimpleObfs(t *testing.T) {
 				}
 				inbound, err := NewInbound(ctx, router, logger, "ss-in", options)
 				require.NoError(t, err)
-				require.NoError(t, inbound.Start(adapter.StartStateInitialize, scope))
+				scope := adapter.NewScope(ctx, logger)
+				t.Cleanup(func() { require.NoError(t, scope.Close()) })
 				if kind == "managed" {
 					require.NoError(t, inbound.(*MultiInbound).UpdateUsers([]string{"alice"}, []string{userKey}))
 				}
@@ -110,6 +108,7 @@ func TestInboundSimpleObfs(t *testing.T) {
 				}
 				outbound, err := NewOutbound(ctx, nil, logger, "ss-out", outOptions)
 				require.NoError(t, err)
+				t.Cleanup(func() { require.NoError(t, common.Close(outbound)) })
 				target := M.ParseSocksaddr("target.example:443")
 				conn, err := outbound.DialContext(ctx, N.NetworkTCP, target)
 				require.NoError(t, err)

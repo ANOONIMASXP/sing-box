@@ -149,6 +149,9 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		reuse:         options.Reuse,
 		quicProxyMode: version == 5 || version == 6 && options.V6Options.QUICProxyMode,
 	}
+	if outbound.quicProxyMode {
+		outbound.quicDestCache = expiringmap.New[quicDestCacheKey, uint64](quicDestCacheTTL)
+	}
 	return outbound, nil
 }
 
@@ -202,6 +205,9 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 			}
 			return h.legacy.DialContext(ctx, conn, destination), nil
 		}
+		if h.reuse {
+			return h.client.DialContext(adapter.ContextForMultiplexSession(ctx), destination)
+		}
 		return h.client.DialContext(ctx, destination)
 	case N.NetworkUDP:
 		h.logger.InfoContext(ctx, "outbound packet connection to ", destination)
@@ -234,6 +240,16 @@ func (h *Outbound) InterfaceUpdated(ctx context.Context) {
 	if h.client != nil {
 		h.client.Reset()
 	}
+}
+
+func (h *Outbound) close() error {
+	if h.quicDestCache != nil {
+		h.quicDestCache.Close()
+	}
+	if h.client == nil {
+		return nil
+	}
+	return h.client.Close()
 }
 
 type simpleObfsDialer struct {
@@ -299,26 +315,20 @@ func (h *Outbound) CloseIdleConnections() {
 	}
 }
 
-func (h *Outbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
-	if stage != adapter.StartStateInitialize {
-		return nil
-	}
-	if h.client != nil {
-		scope.Add(h.client.Close)
-	}
-	if h.quicProxyMode {
-		h.quicDestCache = expiringmap.New[quicDestCacheKey, uint64](quicDestCacheTTL)
-		scope.Add(func() error { h.quicDestCache.Close(); return nil })
-	}
-	return nil
-}
-
 func (h *Outbound) isRecentQUICDest(source M.Socksaddr, destination M.Socksaddr) bool {
 	if h.quicDestCache == nil {
 		return false
 	}
 	_, loaded := h.quicDestCache.LoadAndRefresh(quicDestCacheKey{source: source, destination: destination})
 	return loaded
+}
+
+func (h *Outbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
+	if stage != adapter.StartStateInitialize {
+		return nil
+	}
+	scope.Add(h.close)
+	return nil
 }
 
 func (h *Outbound) markQUICDest(source M.Socksaddr, destination M.Socksaddr) uint64 {

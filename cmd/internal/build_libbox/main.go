@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -17,9 +18,11 @@ import (
 )
 
 var (
-	debugEnabled bool
-	target       string
-	platform     string
+	debugEnabled    bool
+	target          string
+	platform        string
+	extraTags       string
+	versionOverride string
 	// withTailscale bool
 )
 
@@ -27,18 +30,22 @@ func init() {
 	flag.BoolVar(&debugEnabled, "debug", false, "enable debug")
 	flag.StringVar(&target, "target", "android", "target platform")
 	flag.StringVar(&platform, "platform", "", "specify platform")
+	flag.StringVar(&extraTags, "tags", "", "additional comma separated build tags for android-bin")
+	flag.StringVar(&versionOverride, "version", "", "version of the android-bin binary instead of git describe")
 	// flag.BoolVar(&withTailscale, "with-tailscale", false, "build tailscale for iOS and tvOS")
 }
 
 func main() {
 	flag.Parse()
 
-	build_shared.FindMobile()
-
 	switch target {
 	case "android":
+		build_shared.FindMobile()
 		buildAndroid()
+	case "android-bin":
+		buildAndroidBinary()
 	case "apple":
+		build_shared.FindMobile()
 		buildApple()
 	}
 }
@@ -63,7 +70,7 @@ func init() {
 	sharedFlags = append(sharedFlags, "-ldflags", build_shared.LinkerFlags(currentTag, false))
 	debugFlags = append(debugFlags, "-ldflags", build_shared.LinkerFlags(currentTag, true))
 
-	sharedTags = append(sharedTags, "with_quic", "with_wireguard", "with_utls", "with_naive_outbound", "with_clash_api", "with_usbip", "with_openvpn", "with_openconnect", "badlinkname", "tfogo_checklinkname0")
+	sharedTags = append(sharedTags, "with_quic", "with_wireguard", "with_utls", "with_naive_outbound", "with_clash_api", "with_xhttp", "with_usbip", "badlinkname", "tfogo_checklinkname0")
 	darwinTags = append(darwinTags, "with_dhcp", "grpcnotrace")
 	// memcTags = append(memcTags, "with_tailscale")
 	sharedTags = append(sharedTags, "with_tailscale", "ts_omit_logtail", "ts_omit_ssh", "ts_omit_drive", "ts_omit_taildrop", "ts_omit_webclient", "ts_omit_doctor", "ts_omit_capture", "ts_omit_kube", "ts_omit_aws", "ts_omit_synology", "ts_omit_bird")
@@ -104,8 +111,23 @@ func checkJavaVersion() {
 	if err != nil {
 		log.Fatal(E.Cause(err, "check java version"))
 	}
-	if !strings.Contains(javaVersion, "openjdk 17") {
-		log.Fatal("java version should be openjdk 17")
+	javaVersionLower := strings.ToLower(javaVersion)
+	var majorVersion int
+	for _, prefix := range []string{"openjdk ", "java "} {
+		if idx := strings.Index(javaVersionLower, prefix); idx >= 0 {
+			versionStr := javaVersionLower[idx+len(prefix):]
+			for i, c := range versionStr {
+				if c < '0' || c > '9' {
+					versionStr = versionStr[:i]
+					break
+				}
+			}
+			majorVersion, _ = strconv.Atoi(versionStr)
+			break
+		}
+	}
+	if majorVersion < 17 {
+		log.Fatal("java version should be 17 or higher, got: ", strings.TrimSpace(strings.Split(javaVersion, "\n")[0]))
 	}
 }
 
@@ -244,5 +266,148 @@ func buildApple() {
 		os.RemoveAll(targetDir)
 		os.Rename("Libbox.xcframework", targetDir)
 		log.Info("copied to ", targetDir)
+	}
+}
+
+type androidArch struct {
+	goArch string
+	clang  string
+	abi    string
+}
+
+var androidArchList = []androidArch{
+	{"arm64", "aarch64-linux-android", "arm64-v8a"},
+	{"arm", "armv7a-linux-androideabi", "armeabi-v7a"},
+	{"amd64", "x86_64-linux-android", "x86_64"},
+	{"386", "i686-linux-android", "x86"},
+}
+
+func buildAndroidBinary() {
+	build_shared.FindSDK()
+
+	ndkPath := os.Getenv("ANDROID_NDK_HOME")
+	hostOS := "linux"
+	switch runtime.GOOS {
+	case "windows":
+		hostOS = "windows"
+	case "darwin":
+		hostOS = "darwin"
+	}
+	ndkBin := filepath.Join(ndkPath, "toolchains", "llvm", "prebuilt", hostOS+"-x86_64", "bin")
+
+	// Create empty stub archives for libraries that exist on standard Linux
+	// but are built into Android's bionic libc (pthread, rt, resolv).
+	// Go's linker and CGO dependencies (e.g. cronet-go) unconditionally
+	// link against these. This is the standard workaround for Android CGO.
+	stubDir, err := os.MkdirTemp("", "android-bionic-stubs")
+	if err != nil {
+		log.Fatal(E.Cause(err, "create stub directory"))
+	}
+	defer os.RemoveAll(stubDir)
+
+	arTool := filepath.Join(ndkBin, "llvm-ar")
+	if runtime.GOOS == "windows" {
+		arTool += ".exe"
+	}
+	for _, libName := range []string{"libpthread.a", "librt.a", "libresolv.a"} {
+		stubLib := filepath.Join(stubDir, libName)
+		arCmd := exec.Command(arTool, "cr", stubLib)
+		arCmd.Stderr = os.Stderr
+		if err = arCmd.Run(); err != nil {
+			log.Fatal(E.Cause(err, "create "+libName+" stub"))
+		}
+	}
+
+	androidAPI := "24"
+	// Use full build tags from release/DEFAULT_BUILD_TAGS_OTHERS + netgo for Android CGO DNS compat
+	defaultTagsBytes, readErr := os.ReadFile("release/DEFAULT_BUILD_TAGS_OTHERS")
+	var tags []string
+	if readErr == nil {
+		tags = strings.Split(strings.TrimSpace(string(defaultTagsBytes)), ",")
+	} else {
+		tags = append([]string{}, sharedTags...)
+	}
+	tags = append(tags, "with_naive_outbound", "with_xhttp", "netgo")
+	if extraTags != "" {
+		tags = append(tags, strings.Split(extraTags, ",")...)
+	}
+	// deduplicate
+	seen := make(map[string]bool)
+	deduped := tags[:0]
+	for _, t := range tags {
+		if t != "" && !seen[t] {
+			seen[t] = true
+			deduped = append(deduped, t)
+		}
+	}
+	tags = deduped
+	if debugEnabled {
+		tags = append(tags, debugTags...)
+	}
+
+	var archList []androidArch
+	if platform != "" {
+		// e.g. platform = "android/arm64"
+		parts := strings.Split(platform, "/")
+		goarch := parts[len(parts)-1]
+		for _, arch := range androidArchList {
+			if arch.goArch == goarch {
+				archList = append(archList, arch)
+				break
+			}
+		}
+		if len(archList) == 0 {
+			log.Fatal("unsupported platform: ", platform)
+		}
+	} else {
+		archList = androidArchList
+	}
+
+	for _, arch := range archList {
+		outputName := "sing-box-android-" + arch.abi
+		log.Info("building ", outputName, " (GOARCH=", arch.goArch, ", tags=", strings.Join(tags, ","), ")")
+
+		cc := filepath.Join(ndkBin, arch.clang+androidAPI+"-clang")
+		cxx := filepath.Join(ndkBin, arch.clang+androidAPI+"-clang++")
+		if runtime.GOOS == "windows" {
+			cc += ".cmd"
+			cxx += ".cmd"
+		}
+
+		args := []string{
+			"build",
+			"-buildmode=pie",
+			"-v",
+			"-trimpath",
+			"-buildvcs=false",
+		}
+		// Use debugFlags (no -s -w strip) for full binary; sharedFlags strips symbols
+		if versionOverride != "" {
+			args = append(args, "-ldflags", build_shared.LinkerFlags(versionOverride, true))
+		} else {
+			args = append(args, debugFlags...)
+		}
+		args = append(args, "-tags", strings.Join(tags, ","))
+		args = append(args, "-o", outputName)
+		args = append(args, "./cmd/sing-box")
+
+		command := exec.Command("go", args...)
+		command.Env = append(os.Environ(),
+			"CGO_ENABLED=1",
+			"GOOS=android",
+			"GOARCH="+arch.goArch,
+			"CC="+cc,
+			"CXX="+cxx,
+			"CGO_LDFLAGS=-L"+stubDir,
+		)
+		if arch.goArch == "arm" {
+			command.Env = append(command.Env, "GOARM=7")
+		}
+		command.Stdout = os.Stdout
+		command.Stderr = os.Stderr
+		if err = command.Run(); err != nil {
+			log.Fatal(E.Cause(err, "build "+outputName))
+		}
+		log.Info("built ", outputName)
 	}
 }

@@ -150,29 +150,6 @@ func TestAppendDestinationPolicyForcesBypassExclude(t *testing.T) {
 	}
 }
 
-// TestAppendDestinationPolicyMarksFakeIPEchoReply covers fake-ip DNS with a
-// Tailscale bypass_exclude prefix; only the fake-ip range is answered by the
-// ICMP echo responder.
-func TestAppendDestinationPolicyMarksFakeIPEchoReply(t *testing.T) {
-	fakeIP := netip.MustParsePrefix("198.18.0.0/16")
-	fakeIPv6 := netip.MustParsePrefix("fd00::/48")
-	tailnet := netip.MustParsePrefix("100.64.0.0/10")
-	var scope commonEBPF.ActionScope
-	appendDestinationPolicy(&scope, true, nil, dnsModeRespectPolicy,
-		fakeIP, fakeIPv6,
-		[]netip.Prefix{tailnet},
-		true, true)
-	echoReply := make(map[netip.Prefix]bool)
-	for _, decision := range scope.DestinationCIDR {
-		if decision.Action == commonEBPF.DecisionIntercept {
-			echoReply[decision.Prefix] = decision.EchoReply
-		}
-	}
-	if want := map[netip.Prefix]bool{fakeIP: true, fakeIPv6: true, tailnet: false}; !reflect.DeepEqual(echoReply, want) {
-		t.Fatalf("intercept decisions = %v, want %v", echoReply, want)
-	}
-}
-
 func TestNormalizeBypassExclude(t *testing.T) {
 	v4 := netip.MustParsePrefix("100.64.0.0/10")
 	v6 := netip.MustParsePrefix("fd7a:115c:a1e0::/48")
@@ -224,5 +201,78 @@ func TestPortActionsExplicitlyEncodeDNSStage(t *testing.T) {
 				t.Fatalf("wrong DNS action: %+v", rule)
 			}
 		}
+	}
+}
+
+// TestBuildActionPolicyCombinesFakeIPAndBypassExclude covers fake-ip DNS with
+// a Tailscale bypass_exclude prefix; only the fake-ip range is answered by the
+// ICMP echo responder.
+func TestBuildActionPolicyCombinesFakeIPAndBypassExclude(t *testing.T) {
+	fakeIP := netip.MustParsePrefix("198.18.0.0/16")
+	tailnet := netip.MustParsePrefix("100.64.0.0/10")
+	inbound := &Inbound{
+		enableTCP:          true,
+		enableUDP:          true,
+		fakeIPIPv4Prefix:   fakeIP,
+		localBypassExclude: []netip.Prefix{tailnet},
+	}
+	inbound.localPolicy.BypassPrivateAddress = true
+	policy, err := inbound.buildActionPolicy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	echoReply := make(map[netip.Prefix]bool)
+	for _, decision := range policy.Local.DestinationCIDR {
+		if decision.Action == commonEBPF.DecisionIntercept {
+			echoReply[decision.Prefix] = decision.EchoReply
+		}
+	}
+	if want := map[netip.Prefix]bool{fakeIP: true, tailnet: false}; !reflect.DeepEqual(echoReply, want) {
+		t.Fatalf("local intercept decisions = %v, want %v", echoReply, want)
+	}
+	if _, err = commonEBPF.CompileActionPolicy(policy); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestBuildActionPolicySubtractsExcludedUIDsFromIncludes(t *testing.T) {
+	inbound := &Inbound{localPolicy: localUIDPolicy{
+		IncludeUIDConfigured: true,
+		IncludeUID:           []uidRange{{Start: 10000, End: 19999}},
+		ExcludeUID:           []uidRange{{Start: 10123, End: 10123}},
+	}}
+	policy, err := inbound.buildActionPolicy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if policy.Local.Default != commonEBPF.DecisionPass {
+		t.Fatalf("local default = %v, want pass", policy.Local.Default)
+	}
+	want := []commonEBPF.UIDDecision{
+		{Start: 10000, End: 10122, Action: commonEBPF.DecisionIntercept},
+		{Start: 10124, End: 19999, Action: commonEBPF.DecisionIntercept},
+	}
+	if !reflect.DeepEqual(policy.Local.UID, want) {
+		t.Fatalf("local UID decisions = %+v, want %+v", policy.Local.UID, want)
+	}
+	if _, err = commonEBPF.CompileActionPolicy(policy); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestBuildActionPolicyPassesExcludedUIDsByDefault(t *testing.T) {
+	inbound := &Inbound{localPolicy: localUIDPolicy{
+		ExcludeUID: []uidRange{{Start: 10123, End: 10123}},
+	}}
+	policy, err := inbound.buildActionPolicy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if policy.Local.Default != commonEBPF.DecisionIntercept {
+		t.Fatalf("local default = %v, want intercept", policy.Local.Default)
+	}
+	want := []commonEBPF.UIDDecision{{Start: 10123, End: 10123, Action: commonEBPF.DecisionPass}}
+	if !reflect.DeepEqual(policy.Local.UID, want) {
+		t.Fatalf("local UID decisions = %+v, want %+v", policy.Local.UID, want)
 	}
 }

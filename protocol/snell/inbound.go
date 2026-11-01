@@ -33,17 +33,16 @@ var _ adapter.TCPInjectableInbound = (*Inbound)(nil)
 
 type Inbound struct {
 	inbound.Adapter
-	ctx        context.Context
-	router     adapter.ConnectionRouterEx
-	logger     logger.ContextLogger
-	listener   *listener.Listener
-	service    snellprotocol.Service
-	users      []option.SnellUser
-	version    int
-	obfsMode   string
-	udpNat     *quicProxyNATService
-	quicAuth   *quicProxyAuthenticationService
-	quicParser quicProxyInitParser
+	ctx      context.Context
+	router   adapter.ConnectionRouterEx
+	logger   logger.ContextLogger
+	listener *listener.Listener
+	service  snellprotocol.Service
+	users    []option.SnellUser
+	version  int
+	obfsMode string
+	udpNat   *quicProxyNATService
+	quicAuth *quicProxyAuthenticationService
 }
 
 func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.SnellInboundOptions) (adapter.Inbound, error) {
@@ -147,7 +146,8 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		ConnectionHandler: inbound,
 		PacketHandler:     (*inboundPacketHandler)(inbound),
 	}
-	inbound.quicParser = quicParser
+	inbound.udpNat = newQUICProxyNATService((*inboundUDPHandler)(inbound), inbound.preparePacketConnection, snellprotocol.QUICProxySessionIdleTimeout)
+	inbound.quicAuth = newQUICProxyAuthenticationService(quicParser, inbound.udpNat, logger)
 	inbound.listener = listener.New(listenerOptions)
 	return inbound, nil
 }
@@ -167,18 +167,23 @@ func newSnellV5Service(options snellv5.ServiceOptions, userList []int, keyList [
 }
 
 func (h *Inbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
-	switch stage {
-	case adapter.StartStateInitialize:
-		h.udpNat = newQUICProxyNATService((*inboundUDPHandler)(h), h.preparePacketConnection, snellprotocol.QUICProxySessionIdleTimeout)
-		scope.Add(func() error { h.udpNat.Close(); return nil })
-		h.quicAuth = newQUICProxyAuthenticationService(h.quicParser, h.udpNat, h.logger)
-		scope.Add(func() error { h.quicAuth.Close(); return nil })
-	case adapter.StartStateStart:
-		if err := h.listener.Start(); err != nil {
-			return err
-		}
-		scope.Add(h.listener.Close)
+	if stage != adapter.StartStateStart {
+		return nil
 	}
+	err := h.listener.Start()
+	if err != nil {
+		return err
+	}
+	scope.Add(func() error {
+		listenerErr := h.listener.Close()
+		if h.quicAuth != nil {
+			h.quicAuth.Close()
+		}
+		if h.udpNat != nil {
+			h.udpNat.Close()
+		}
+		return listenerErr
+	})
 	return nil
 }
 

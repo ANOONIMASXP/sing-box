@@ -22,6 +22,7 @@ type Device interface {
 	Start() error
 	UpdateConfiguration(configuration Configuration) error
 	WriteInboundBuffers(packetBuffers []*buf.Buffer) error
+	WaitWriteInboundBuffers(packetBuffers []*buf.Buffer) error
 	SetPacketWriter(writer PacketWriter)
 	PortAddresses() (netip.Addr, netip.Addr)
 	PortMTU() uint32
@@ -53,7 +54,11 @@ type Options struct {
 	PacketFrontHeadroom  int
 	PacketRearHeadroom   int
 	Route                func(packet []byte) *tun.OutboundQueue
-	Configuration        Configuration
+	// SourceAddress optionally selects the local address used by the internal
+	// stack for a destination. An invalid or wrong-family result falls back to
+	// the first configured address of that family.
+	SourceAddress func(destination netip.Addr) netip.Addr
+	Configuration Configuration
 }
 
 type Configuration struct {

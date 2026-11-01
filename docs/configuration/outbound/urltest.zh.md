@@ -16,6 +16,11 @@
   ],
   "exclude": "",
   "include": "",
+  "include_type": [],
+  "exclude_type": [],
+  "include_transport": [],
+  "exclude_transport": [],
+  "network": "",
   "url": "",
   "interval": "",
   "tolerance": 50,
@@ -47,6 +52,47 @@
 
 包含 `providers` 节点的正则表达式。
 
+#### include_type
+
+`providers` 节点中保留的出站类型列表，例如 `vless`、`hysteria2`。
+
+不区分大小写。接受当前构建中的所有出站与端点类型，以及 Clash 名称和简写 `ss`、`socks5`、`hy`、`hy1`、`hy2`、`wg`、`naiveproxy`、`shadow-tls`、`openvpn`、`masque`。未知类型会在启动时报错。
+
+#### exclude_type
+
+从 `providers` 节点中排除的出站类型列表，优先于 `include_type`。
+
+#### include_transport
+
+`providers` 节点中保留的传输方式列表：`tcp`（无传输层）、`ws`、`httpupgrade`、`http`、`grpc`、`quic`、`xhttp` 以及其他已注册的插件传输。接受 Clash 名称 `websocket`、`h2`、`gun`、`raw`、`splithttp`。
+
+只有 `vmess`、`vless`、`trojan` 和 `shadowsocks`（其 `v2ray-plugin` 视为 `ws` 或 `quic`）有传输方式。其他节点不属于任何传输：`include_transport` 会排除它们，`exclude_transport` 会保留它们。
+
+#### exclude_transport
+
+从 `providers` 节点中排除的传输方式列表，优先于 `include_transport`。
+
+#### network
+
+`tcp`、`udp` 或二者组成的列表。
+
+只保留支持全部所列网络的 `providers` 节点。能力取自节点本身，例如 Shadowsocks 节点上的 `"network": "tcp"`、Clash 订阅中的 `udp: false`，而不是节点名称。若订阅源开启了 UDP 探测（`health_check.udp`），探测失败且结果仍有效的节点会被移除，直到再次探测成功。
+
+各协议的 UDP 能力：
+
+| 协议 | UDP |
+|---|---|
+| `shadowsocks` `vmess` `vless` `trojan` `socks` `snell` `anytls` `quicx` | 取自其 `network` 字段，订阅中取自 Clash 的 `udp` 字段 |
+| `hysteria` `hysteria2` `tuic` | 支持，除非 `network` 为 `tcp`；来自 Clash 订阅时与 Clash 一致，始终支持 |
+| `socks` 版本 `4` / `4a`、`naive` | 仅在启用 `udp_over_tcp` 时支持 |
+| `http` | 取自其 `network` 字段（CONNECT-UDP）；来自 Clash 订阅时始终不支持 |
+| `ssh` `shadowtls` `tor` | 不支持 |
+| `wireguard` `tailscale` `tailcat` `nowhere` 等端点 | 支持 |
+
+!!! note ""
+
+    `include`、`exclude`、`include_type`、`exclude_type`、`include_transport`、`exclude_transport`、`network` 在 selector、urltest、loadbalance、smart 分组中行为一致，每次订阅更新后重新应用，且都只作用于 `providers` 节点，节点需全部满足才会加入；`outbounds` 中列出的成员始终保留。
+
 #### url
 
 用于测试的链接。默认使用 `https://www.gstatic.com/generate_204`。
@@ -54,6 +100,11 @@
 #### interval
 
 测试间隔。 默认使用 `3m`。
+
+每个间隔测试上次结果早于该间隔的成员，最多同时测试 10 个。
+嵌套组的成员通过对应的组测试，同一成员被多个嵌套组包含时每轮只测试一次。
+健康检查只在分组被使用时运行；超过 `idle_timeout` 没有连接后暂停，下一个连接到来时恢复。
+网络变化后重新测试所有成员。
 
 #### tolerance
 
@@ -88,3 +139,11 @@
 当选定的出站发生更改时，中断现有连接。
 
 仅入站连接受此设置影响，内部连接将始终被中断。
+
+### 健康检查行为
+
+* **选择**：先找出延迟最低的成员；当前成员的延迟在其 `tolerance` 以内时保持不变。
+* **冷启动**：成员尚未测速时，在支持该网络的成员中随机选一个并固定，避免首批连接全部压到第一个成员。
+* **启动**：启动后若没有任何成员可用（网络尚未就绪），在启动后 15s、35s、60s 测试所有成员（不晚于 `interval`），直到有成员可用或分组进入闲置。
+* **连接失败**：经由分组的连接失败时，3 秒后单独测试失败的成员。可用则保留其延迟并在 1 分钟内信任它；否则移除其测速记录并改选延迟最低的其他成员。没有任何成员可用时随机改选一个成员并重新测试所有成员，之后 90 秒内再次失败会直接切换成员。
+* **手动选择**：通过 Clash API 或客户端选择成员时会先测试，不可用则拒绝。通过后该成员被固定：健康检查和连接失败都不会切走，重启后自动恢复。固定期间健康检查只测试被固定的成员。对分组测速或选择空名称（Clash API 的 `DELETE /proxies/{group}`）会解除固定，立即回到延迟最低的成员，并在后台刷新其他成员。被固定的成员从提供者中消失时自动解除；只支持 TCP 的成员被固定时，UDP 仍自动选择。

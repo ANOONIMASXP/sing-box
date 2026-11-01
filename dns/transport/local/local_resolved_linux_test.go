@@ -47,13 +47,16 @@ func TestResolvedUnavailableErrors(t *testing.T) {
 	}
 }
 
+type resolvedTestNetworkManager struct{ adapter.NetworkManager }
+
+func (*resolvedTestNetworkManager) FlushSystemDNSCache() {}
+
 type resolvedTestMonitor struct{ tun.DefaultInterfaceMonitor }
 
 func (*resolvedTestMonitor) DefaultInterface() *control.Interface {
 	return &control.Interface{Index: 1, Name: "lo"}
 }
-func (*resolvedTestMonitor) MyInterfaces() []string                                               { return nil }
-func (*resolvedTestMonitor) UnregisterCallback(*list.Element[tun.DefaultInterfaceUpdateCallback]) {}
+func (*resolvedTestMonitor) MyInterfaces() []string { return nil }
 func (*resolvedTestMonitor) RegisterCallback(tun.DefaultInterfaceUpdateCallback) *list.Element[tun.DefaultInterfaceUpdateCallback] {
 	return nil
 }
@@ -188,7 +191,7 @@ func testResolvedFallbackPrivateBusRecovery(t *testing.T, failure string) {
 	if err = finder.Update(); err != nil {
 		t.Fatal(err)
 	}
-	resolver := &DBusResolvedResolver{ctx: ctx, logger: log.NewNOPFactory().Logger(), interfaceFinder: finder, interfaceMonitor: &resolvedTestMonitor{}, systemBus: client}
+	resolver := &DBusResolvedResolver{ctx: ctx, logger: log.NewNOPFactory().Logger(), interfaceFinder: finder, networkManager: &resolvedTestNetworkManager{}, interfaceMonitor: &resolvedTestMonitor{}, systemBus: client}
 	if err = resolver.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +297,7 @@ func TestResolvedDiscoveryCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resolver := &DBusResolvedResolver{ctx: context.Background(), logger: log.NewNOPFactory().Logger(), interfaceMonitor: &resolvedTestMonitor{}, systemBus: client}
+	resolver := &DBusResolvedResolver{ctx: context.Background(), logger: log.NewNOPFactory().Logger(), networkManager: &resolvedTestNetworkManager{}, interfaceMonitor: &resolvedTestMonitor{}, systemBus: client}
 	defer resolver.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -338,13 +341,13 @@ func TestResolvedScopeSelectionWithFallback(t *testing.T) {
 		{"public.example.", global}, {"host.internal.example.", link},
 	} {
 		got := serverSet.selectScopes(test.name)
-		if len(got) != 1 || got[0].servers[0].primaryTransport != test.want {
+		if len(got) != 1 || len(got[0].servers) != 1 || got[0].servers[0].primaryTransport != test.want {
 			t.Fatalf("wrong DNS scope for %s: %v", test.name, got)
 		}
 	}
 	serverSet.scopes = serverSet.scopes[:1]
 	got := serverSet.selectScopes("public.example.")
-	if len(got) != 1 || got[0].servers[0].primaryTransport != fallback {
+	if len(got) != 1 || len(got[0].servers) != 1 || got[0].servers[0].primaryTransport != fallback {
 		t.Fatalf("lost resolved fallback DNS: %v", got)
 	}
 }

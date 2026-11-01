@@ -39,7 +39,6 @@ func TestShadowsocks2022ConcurrentFirstPayload(t *testing.T) {
 				router := &handshakeTestRouter{routed: routed}
 				inbound, err := NewInbound(context.Background(), router, log.NewNOPFactory().NewLogger("test"), "in", option.ShadowsocksInboundOptions{Method: method, Password: password})
 				require.NoError(t, err)
-				// This test injects the connection directly without starting a listener.
 				finished := make(chan struct{})
 				go func() {
 					defer close(finished)

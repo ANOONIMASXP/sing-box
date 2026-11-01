@@ -21,6 +21,7 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/protocol/anytls"
+	"github.com/sagernet/sing-box/protocol/anyx"
 	"github.com/sagernet/sing-box/protocol/block"
 	"github.com/sagernet/sing-box/protocol/bridge"
 	"github.com/sagernet/sing-box/protocol/direct"
@@ -29,6 +30,7 @@ import (
 	"github.com/sagernet/sing-box/protocol/masque"
 	"github.com/sagernet/sing-box/protocol/mixed"
 	"github.com/sagernet/sing-box/protocol/naive"
+	"github.com/sagernet/sing-box/protocol/nowhere"
 	"github.com/sagernet/sing-box/protocol/pass"
 	"github.com/sagernet/sing-box/protocol/redirect"
 	"github.com/sagernet/sing-box/protocol/shadowsocks"
@@ -75,6 +77,9 @@ func InboundRegistry() *inbound.Registry {
 	shadowtls.RegisterInbound(registry)
 	vless.RegisterInbound(registry)
 	anytls.RegisterInbound(registry)
+	anyx.RegisterInbound(registry)
+	nowhere.RegisterInbound(registry)
+	nowhere.RegisterEgressInbound(registry)
 
 	registerQUICInbounds(registry)
 	registerCloudflaredInbound(registry)
@@ -109,7 +114,7 @@ func OutboundRegistry() *outbound.Registry {
 	group.RegisterSmart(registry)
 	group.RegisterSmartLoadBalance(registry)
 	group.RegisterSmartRegion(registry)
-
+	group.RegisterNested(registry)
 
 	socks.RegisterOutbound(registry)
 	http.RegisterOutbound(registry)
@@ -123,6 +128,8 @@ func OutboundRegistry() *outbound.Registry {
 	shadowtls.RegisterOutbound(registry)
 	vless.RegisterOutbound(registry)
 	anytls.RegisterOutbound(registry)
+	anyx.RegisterOutbound(registry)
+	nowhere.RegisterOutbound(registry)
 
 	registerQUICOutbounds(registry)
 	registerTailcatOutbound(registry)
@@ -139,6 +146,7 @@ func EndpointRegistry() *endpoint.Registry {
 	registerOpenVPNEndpoints(registry)
 	masque.RegisterEndpoint(registry)
 	registerTailscaleEndpoint(registry)
+	registerEasyTierEndpoint(registry)
 
 	return registry
 }
@@ -160,6 +168,7 @@ func DNSTransportRegistry() *dns.TransportRegistry {
 	registerQUICTransports(registry)
 	registerDHCPTransport(registry)
 	registerTailscaleTransport(registry)
+	registerEasyTierTransport(registry)
 	registerOpenConnectDNSTransport(registry)
 	registerOpenVPNDNSTransport(registry)
 

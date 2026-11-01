@@ -28,8 +28,8 @@ func TestResolvedChainTrafficAttribution(t *testing.T) {
 	manager := newTestManager(t, true)
 	scope := adapter.NewScope(context.Background(), log.NewNOPFactory().Logger())
 	t.Cleanup(func() { require.NoError(t, scope.Close()) })
-	require.NoError(t, scope.Start("traffic", manager.traffic, adapter.StartStateInitialize))
-	require.NoError(t, scope.Start("observability", manager, adapter.StartStateInitialize))
+	require.NoError(t, manager.traffic.Start(adapter.StartStateInitialize, scope))
+	require.NoError(t, manager.Start(adapter.StartStateInitialize, scope))
 	outer := &snapshotOutbound{tag: "select", kind: "selector"}
 	balance := &snapshotOutbound{tag: "balance", kind: "loadbalance"}
 	leaf := &snapshotOutbound{tag: "first", kind: "direct"}
@@ -64,8 +64,8 @@ func TestRecentConnectionsSurviveGC(t *testing.T) {
 	manager.recentTTL = time.Hour
 	scope := adapter.NewScope(context.Background(), log.NewNOPFactory().Logger())
 	t.Cleanup(func() { require.NoError(t, scope.Close()) })
-	require.NoError(t, scope.Start("traffic", manager.traffic, adapter.StartStateInitialize))
-	require.NoError(t, scope.Start("observability", manager, adapter.StartStateInitialize))
+	require.NoError(t, manager.traffic.Start(adapter.StartStateInitialize, scope))
+	require.NoError(t, manager.Start(adapter.StartStateInitialize, scope))
 	outbound := &snapshotOutbound{tag: "direct", kind: "direct"}
 	flow := manager.traffic.RoutedFlow(context.Background(), adapter.InboundContext{
 		Network: "udp", OutboundChain: []adapter.Outbound{outbound},

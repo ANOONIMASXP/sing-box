@@ -10,9 +10,11 @@ import (
 )
 
 // compileProcessUIDPolicy converts sing-box's include/exclude/package result
-// into final UID actions for sing-ebpf. The library receives no selector
-// semantics: unmatched sockets use the returned default action, while each
-// decision is the exceptional action to apply to its UID range.
+// into final UID actions for sing-ebpf, for both the local data planes and the
+// process tracker. The library receives no selector semantics: unmatched
+// sockets use the returned default action, while each decision is the
+// exceptional action to apply to its UID range. Excludes are subtracted from
+// includes here, so the decisions never overlap.
 func (i *Inbound) compileProcessUIDPolicy() ([]commonEBPF.UIDDecision, commonEBPF.Decision) {
 	if i.localPolicy.IncludeUIDConfigured {
 		include := subtractUIDRanges(i.localPolicy.IncludeUID, i.localPolicy.ExcludeUID)
@@ -116,26 +118,27 @@ var eBPFPrivateDestinationPrefixes = []netip.Prefix{
 }
 
 func (i *Inbound) compileActionPolicy() (commonEBPF.CompiledPolicy, error) {
+	policy, err := i.buildActionPolicy()
+	if err != nil {
+		return commonEBPF.CompiledPolicy{}, err
+	}
+	return commonEBPF.CompileActionPolicy(policy)
+}
+
+func (i *Inbound) buildActionPolicy() (commonEBPF.ActionPolicy, error) {
+	// The local data planes and the process tracker must see the same final
+	// UID actions. Passing include ranges and overlapping exclude ranges as
+	// separate decisions would let the include win and silently drop every
+	// exclude_* option whenever an include_* option is configured.
+	uidDecisions, uidDefault := i.compileProcessUIDPolicy()
 	policy := commonEBPF.ActionPolicy{
 		Local: commonEBPF.ActionScope{
-			Default: commonEBPF.DecisionIntercept,
+			Default: uidDefault,
+			UID:     uidDecisions,
 		},
 		Shared: commonEBPF.ActionScope{
 			Default: commonEBPF.DecisionIntercept,
 		},
-	}
-	if i.localPolicy.IncludeUIDConfigured {
-		policy.Local.Default = commonEBPF.DecisionPass
-		for _, uid := range i.localPolicy.IncludeUID {
-			policy.Local.UID = append(policy.Local.UID, commonEBPF.UIDDecision{
-				Start: uid.Start, End: uid.End, Action: commonEBPF.DecisionIntercept,
-			})
-		}
-	}
-	for _, uid := range i.localPolicy.ExcludeUID {
-		policy.Local.UID = append(policy.Local.UID, commonEBPF.UIDDecision{
-			Start: uid.Start, End: uid.End, Action: commonEBPF.DecisionPass,
-		})
 	}
 	appendDestinationPolicy(&policy.Local, i.localPolicy.BypassPrivateAddress, i.localBypassPort, i.localDNSMode,
 		i.fakeIPIPv4Prefix, i.fakeIPIPv6Prefix, i.localBypassExclude, i.enableTCP, i.enableUDP)
@@ -165,7 +168,7 @@ func (i *Inbound) compileActionPolicy() (commonEBPF.CompiledPolicy, error) {
 		i.fakeIPIPv4Prefix, i.fakeIPIPv6Prefix, i.sharedBypassExclude, i.enableTCP, i.enableUDP)
 	i.localInitialDestinations = destinationPassDecisions(policy.Local.DestinationCIDR)
 	i.sharedInitialDestinations = destinationPassDecisions(policy.Shared.DestinationCIDR)
-	return commonEBPF.CompileActionPolicy(policy)
+	return policy, nil
 }
 
 func sharedSourceDefault(includeCIDRs, includeMACs int) commonEBPF.Decision {

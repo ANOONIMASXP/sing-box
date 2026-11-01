@@ -130,10 +130,21 @@ attachment 列表是实际运行机制的准确信息。已配置路径没有对
 等待接口；cgroup attachment 本来就不存在网络接口 filter。
 
 local cgroup 还应记录 API 返回的实际运行字段：`local_cgroup_attach_mode`
-（`link_create`、`legacy_multi`、`legacy_exclusive` 或 `mixed`）、
+（`link_create`、`legacy_multi`、`legacy_exclusive`、`legacy_netd_replace` 或
+`mixed`）、
 `local_udp_cleanup_mode`、`local_udp_userspace_cleanup_mode`、
 `local_udp_storage_mode` 和 `local_udp_time_mode`。这些字段表示厂商内核或安全策略
 触发回退后真正选中的路径，不是能力猜测。
+
+UDP socket-release 路径单独报告：
+
+- `local_udp_release_program` 是实际使用的 socket-release 程序：
+  `sb_ebpf_rel_notify` 会把每次释放通知到用户态，`sb_ebpf_rel` 只清理内核状态。
+  内核没有 socket-release hook 时不返回该字段。
+- `local_udp_release_observer` 为 true 表示释放通知能到达用户态。
+- `local_udp_release_fallback_reason` 说明通知不可用的原因：
+  `socket_release_unsupported`、`ringbuf_unsupported`、`ringbuf_map_load_failed`、
+  `ringbuf_reader_unavailable` 或 `release_notification_program_load_failed`。
 
 local socket assignment 或 shared `socket_assign` 启用时，API 还会返回 `tc_*` 运行态字段：实际
 `tcx`/`clsact`/`mixed` 挂载机制、TCP listener 的 `sockmap`/`direct` 查找方式、delivery
@@ -159,8 +170,10 @@ health check/reconcile 时间以及网络代数。它们来自运行中的资源
 - map occupancy 只在显式请求诊断时采集。map 的 `pressure: not_applicable` 表示其布局固定，
   不能安全遍历；`category: configured_policy` 表示容量来自已编译的策略，填满是预期状态，
   `pressure: configured` 只是对应的中性结果；
-  `recovery_failed` 表示键遍历本身失败。上述状态都不表示占用为零。顶层 `error` 表示在
-  完成所有 map 检查前，map 枚举或检查权限被拒绝。
+  `recovery_failed` 表示键遍历本身失败。上述状态都不表示占用为零。整体状态反映实际测得的
+  占用（`warning` 或 `degraded`），键遍历失败时为 `degraded`；`not_applicable` 与
+  `configured` 的 map 不影响整体状态。顶层 `error` 表示在完成所有 map 检查前，map 枚举或
+  检查权限被拒绝。
 
 program/map 枚举按 `sb_` 命名约定筛选，同一内核中其他可见的 sing-ebpf 进程也可能
 出现；每个入站自身的 attachment、策略状态、用户态会话和计数才是实例级证据。
@@ -175,6 +188,10 @@ program/map 枚举按 `sb_` 命名约定筛选，同一内核中其他可见的 
 - 对象已成功加载，但 cgroup 程序挂载时报 `operation not permitted`，应检查所选层级、
   delegation、multi/独占挂载支持和 Android netd 等现有 hook，并记录启动时最终选择的
   cgroup 挂载方式。
+- `refusing to replace existing cgroup program owner` 表示有其他程序以单程序模式
+  持有该 hook，错误中会列出这些程序以及保留它们的原因。sing-box 只会替换 Android
+  15+ netd 直接放行的占位程序，此时挂载方式报告为 `legacy_netd_replace`。对于其他
+  程序，应释放该 hook 或使用 `local.data_plane=tc`。
 - 探测成功后 TC 挂载仍失败，需要实际链路类型、qdisc/filter 清单、接口锁结果和
   netlink 错误；探测命令按设计不会修改 qdisc。
 - SOCKMAP 失败后可以正常选择 legacy TC 对象；只有回退对象也失败或入站未激活时，
@@ -281,6 +298,11 @@ qdisc/filter 位于同一接口就删除它们。
 
 清理报错时，保留准确对象/接口标识；在人工删除前，优先尝试使用同一构建重新启动并
 正常停止。人工清理只能针对已明确确认由 sing-box 创建的状态。
+
+在入站接管过 netd hook 的设备上，正常停止会把 netd 的占位程序放回去。如果进程被
+强制结束，这些 hook 会保持被接管状态，直到下次启动时先还原 netd 的程序再重新挂载。
+这些 hook 上的 `sb_hook_allow` 程序是 netd 固定程序不可用时用来代替其占位程序的
+直接放行程序，不要卸载它：hook 被清空会导致重启的 netd 中止。
 
 ## 隐私
 

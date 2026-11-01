@@ -18,8 +18,10 @@ trie 安全检查是例外：受影响内核可能在探测动作本身执行时
 
 ### 标准 Linux 与 OpenWrt
 
-在普通 Linux 主机或 OpenWrt 路由器上，应以 root 运行 sing-box，或授予等价能力，通常
-需要 `CAP_BPF` 和 `CAP_NET_ADMIN`；旧内核还可能需要 `CAP_SYS_ADMIN`。目标配置必须
+在普通 Linux 主机或 OpenWrt 路由器上，应以 root 运行 sing-box。创建 map 和程序需要
+`CAP_BPF`（或 `CAP_SYS_ADMIN`），挂载需要 `CAP_NET_ADMIN`，启动清理需要按 ID 读取已挂载
+的程序，因此还需要 `CAP_SYS_ADMIN`；5.11 之前的内核还需要 `CAP_SYS_RESOURCE` 来提高
+memlock 限制。目标配置必须
 提供所需的 BPF syscall、map、helper、TC classifier。local socket assignment 和 shared `socket_assign`
 的 TCP/UDP 均使用专用 netns，需要 `CONFIG_NET_NS`、`CONFIG_VETH`，以及创建/切换
 命名空间所需的 `CAP_SYS_ADMIN`（新内核也需要）和配置链路/路由所需的 `CAP_NET_ADMIN`。
@@ -212,8 +214,8 @@ BTF 中确认存在修复后的 `bpf_lpm_trie_key_u8` 布局。若内核处于�
   `SO_COOKIE` 并更新 cookie map；
 
 以 root 运行兼容性最好。仅使用 capability 时会受内核版本、发行版策略、LSM
-规则和 Android SELinux 策略影响，通常需要 `CAP_NET_ADMIN`、`CAP_BPF`，旧内核
-还可能需要 `CAP_SYS_ADMIN`。
+规则和 Android SELinux 策略影响，需要 `CAP_BPF`、`CAP_NET_ADMIN` 和 `CAP_SYS_ADMIN`
+（启动清理需要按 ID 读取已挂载的程序），5.11 之前的内核还需要 `CAP_SYS_RESOURCE`。
 
 运行时不依赖 `bpftool`、`tc` 或 `ip` 命令，sing-box 直接使用 BPF syscall 和
 netlink。

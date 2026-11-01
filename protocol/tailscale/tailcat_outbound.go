@@ -34,6 +34,7 @@ import (
 var (
 	_ adapter.Outbound                   = (*TailcatOutbound)(nil)
 	_ adapter.IdleConnectionKeeper       = (*TailcatOutbound)(nil)
+	_ adapter.OutboundWithMultiplex      = (*TailcatOutbound)(nil)
 	_ adapter.InterfaceUpdateListener    = (*TailcatOutbound)(nil)
 	_ dialer.PacketDialerWithDestination = (*TailcatOutbound)(nil)
 )
@@ -59,6 +60,7 @@ type TailcatOutbound struct {
 	node            *tailcatNode
 	active          int
 	idle            bool
+	tcpConcurrent   dialer.TCPConcurrentPolicy
 }
 
 func NewTailcatOutbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.TailcatOutboundOptions) (adapter.Outbound, error) {
@@ -113,6 +115,7 @@ func NewTailcatOutbound(ctx context.Context, router adapter.Router, logger log.C
 		serverDiscoKey:  key.DiscoPublicFromRaw32(mem.B(serverDiscoKey[:])),
 		presharedKey:    presharedKey,
 		derp:            derp,
+		tcpConcurrent:   dialer.NewTCPConcurrentPolicy(ctx, options.TCPConcurrent),
 	}, nil
 }
 
@@ -154,11 +157,12 @@ func (o *TailcatOutbound) acquire(ctx context.Context) (*tailcatNode, func(), er
 		return nil, nil, err
 	}
 	o.active++
+	keepSession := adapter.KeepSessionFromContext(ctx)
 	return node, sync.OnceFunc(func() {
 		o.access.Lock()
 		defer o.access.Unlock()
 		o.active--
-		if o.active == 0 && o.idle {
+		if o.active == 0 && o.idle && !keepSession {
 			o.closeNodeLocked()
 		}
 	}), nil
@@ -209,6 +213,10 @@ func (o *TailcatOutbound) ensureLocked(ctx context.Context) (*tailcatNode, error
 	return node, nil
 }
 
+func (o *TailcatOutbound) MultiplexEnabled() bool {
+	return true
+}
+
 func (o *TailcatOutbound) SetKeepIdleConnections(keep bool) {
 	o.access.Lock()
 	defer o.access.Unlock()
@@ -248,9 +256,23 @@ func (o *TailcatOutbound) DialContext(ctx context.Context, network string, desti
 		if err != nil {
 			return nil, err
 		}
-		return N.DialSerial(ctx, (*tailcatDialer)(o), network, destination, destinationAddresses)
+		return dialer.DialSerialConcurrent(ctx, o.tcpConcurrent, (*tailcatDialer)(o), network, destination, destinationAddresses)
 	}
 	return (*tailcatDialer)(o).DialContext(ctx, network, destination)
+}
+
+// DialParallel dials route-resolved addresses through the node and races them
+// with dns.tcp_concurrent.
+func (o *TailcatOutbound) DialParallel(ctx context.Context, network string, destination M.Socksaddr, destinationAddresses []netip.Addr) (net.Conn, error) {
+	switch N.NetworkName(network) {
+	case N.NetworkTCP:
+		o.logger.InfoContext(ctx, "outbound connection to ", destination)
+	case N.NetworkUDP:
+		o.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+	default:
+		return nil, E.Extend(N.ErrUnknownNetwork, network)
+	}
+	return dialer.DialSerialConcurrent(ctx, o.tcpConcurrent, (*tailcatDialer)(o), network, destination, destinationAddresses)
 }
 
 func (o *TailcatOutbound) ListenPacketWithDestination(ctx context.Context, destination M.Socksaddr) (net.PacketConn, netip.Addr, error) {

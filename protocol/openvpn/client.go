@@ -45,24 +45,26 @@ var (
 
 type ClientEndpoint struct {
 	endpointBase
-	ctx                  context.Context
-	loopContext          context.Context
-	cancelLoop           context.CancelFunc
-	dnsRouter            adapter.DNSRouter
-	outboundDialer       N.Dialer
-	queryOptions         adapter.DNSQueryOptions
-	client               *ovpn.Client
-	deviceOptions        *device.Options
-	device               device.Device
-	onDemand             bool
-	stateAccess          sync.Mutex
-	state                atomic.Pointer[clientState]
-	dnsTransport         *DNSTransport
-	deviceStarted        bool
-	statusAccess         sync.Mutex
-	statusUpdated        chan struct{}
-	terminalError        string
+	ctx            context.Context
+	loopContext    context.Context
+	cancelLoop     context.CancelFunc
+	dnsRouter      adapter.DNSRouter
+	outboundDialer N.Dialer
+	queryOptions   adapter.DNSQueryOptions
+	client         *ovpn.Client
+	deviceOptions  *device.Options
+	device         device.Device
+	onDemand       bool
+	stateAccess    sync.Mutex
+	state          atomic.Pointer[clientState]
+	dnsTransport   *DNSTransport
+	deviceStarted  bool
+	statusAccess   sync.Mutex
+	statusUpdated  chan struct{}
+	terminalError  string
+
 	innerDNSQueryOptions adapter.DNSQueryOptions
+	tcpConcurrent        dialer.TCPConcurrentPolicy
 }
 
 type clientState struct {
@@ -95,6 +97,7 @@ func NewClientEndpoint(ctx context.Context, router adapter.Router, logger log.Co
 		statusUpdated: make(chan struct{}),
 		onDemand:      options.OnDemand,
 	}
+	clientEndpoint.tcpConcurrent = dialer.NewTCPConcurrentPolicy(ctx, options.TCPConcurrent)
 	clientEndpoint.innerDNSQueryOptions = innerDNSQueryOptions
 	success := false
 	defer func() {
@@ -865,12 +868,28 @@ func (c *ClientEndpoint) DialContext(ctx context.Context, network string, destin
 		if err != nil {
 			return nil, err
 		}
-		return N.DialSerial(ctx, c.device, network, destination, destinationAddresses)
+		return dialer.DialSerialConcurrent(ctx, c.tcpConcurrent, c.device, network, destination, destinationAddresses)
 	}
 	if !destination.Addr.IsValid() {
 		return nil, E.New("invalid destination: ", destination)
 	}
 	return c.device.DialContext(ctx, network, destination)
+}
+
+// DialParallel dials route-resolved addresses through the tunnel and races
+// them with dns.tcp_concurrent.
+func (c *ClientEndpoint) DialParallel(ctx context.Context, network string, destination M.Socksaddr, destinationAddresses []netip.Addr) (net.Conn, error) {
+	switch N.NetworkName(network) {
+	case N.NetworkTCP:
+		c.logger.InfoContext(ctx, "outbound connection to ", destination)
+	case N.NetworkUDP:
+		c.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+	}
+	readyErr := c.waitReady(ctx)
+	if readyErr != nil {
+		return nil, readyErr
+	}
+	return dialer.DialSerialConcurrent(ctx, c.tcpConcurrent, c.device, network, destination, destinationAddresses)
 }
 
 func (c *ClientEndpoint) ListenPacketWithDestination(ctx context.Context, destination M.Socksaddr) (net.PacketConn, netip.Addr, error) {

@@ -35,7 +35,7 @@ func TestSelectorInterruptRoutedConnections(t *testing.T) {
 					logger := log.NewNOPFactory().NewLogger("test")
 					scope := adapter.NewScope(ctx, logger)
 					t.Cleanup(func() { require.NoError(t, scope.Close()) })
-					manager := NewConnectionManager(logger)
+					manager := NewConnectionManager(context.Background(), logger)
 					incoming := newSelectorInterruptTestConn()
 					remote := newSelectorInterruptTestConn()
 					t.Cleanup(func() { incoming.Close(); remote.Close() })
@@ -68,14 +68,12 @@ func TestSelectorInterruptRoutedConnections(t *testing.T) {
 						require.NoError(t, err)
 						urltest := raw.(*group.URLTest)
 						require.NoError(t, urltest.Start(adapter.StartStateStart, scope))
-
 						selected = urltest
 					case "loadbalance":
 						raw, err := group.NewLoadBalance(groupCtx, nil, logger, "loadbalance", option.LoadBalanceOutboundOptions{GroupCommonOption: option.GroupCommonOption{Outbounds: []string{"leaf"}}, Strategy: group.StrategyRoundRobin})
 						require.NoError(t, err)
 						balance := raw.(*group.LoadBalance)
 						require.NoError(t, balance.Start(adapter.StartStateStart, scope))
-
 						selected = balance
 					case "handler", "nested-handler":
 						handler = &selectorInterruptTestHandler{selectorInterruptTestOutbound: leaf}

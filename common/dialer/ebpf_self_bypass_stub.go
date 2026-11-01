@@ -23,7 +23,7 @@ func EBPFSelfBypassCleanup(adapter.NetworkManager, syscall.RawConn) func() {
 	return nil
 }
 
-func PrepareEBPFSelfBypass(adapter.NetworkManager, []option.Inbound, *adapter.Scope) error {
+func PrepareEBPFSelfBypass(adapter.NetworkManager, []option.Inbound) error {
 	return nil
 }
 

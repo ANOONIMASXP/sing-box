@@ -52,9 +52,9 @@ jobs:
         with:
           fetch-depth: 0
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: 1.26.8
+          go-version: 1.26.10
           cache: false
       - name: Cache Go modules
         uses: actions/cache/restore@v4
@@ -143,9 +143,9 @@ jobs:
           fetch-depth: 1
       - name: Setup Go
         if: ${{ ! matrix.legacy_win7 }}
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: 1.26.8
+          go-version: 1.26.10
           cache: false
       - name: Cache Go modules
         uses: actions/cache/restore@v4
@@ -160,7 +160,7 @@ jobs:
         with:
           path: |
             ~/go/go_win7
-          key: go_win7_1268
+          key: go_win7_12610
       - name: Setup Go for Windows 7
         if: matrix.legacy_win7 && steps.cache-go-for-windows7.outputs.cache-hit != 'true'
         env:
@@ -183,7 +183,7 @@ jobs:
           set -xeuo pipefail
           CRONET_GO_VERSION=$(cat .github/CRONET_GO_VERSION)
           git init ~/cronet-go
-          git -C ~/cronet-go remote add origin https://github.com/sagernet/cronet-go.git
+          git -C ~/cronet-go remote add origin https://github.com/MiChongs/cronet-go.git
           git -C ~/cronet-go sparse-checkout set --no-cone '/*' '!/lib'
           git -C ~/cronet-go fetch --depth=1 --filter=blob:none origin "$CRONET_GO_VERSION"
           git -C ~/cronet-go checkout FETCH_HEAD
@@ -224,6 +224,8 @@ jobs:
           set -xeuo pipefail
           if [[ "${{ matrix.naive }}" == "true" ]]; then
             TAGS=$(cat release/DEFAULT_BUILD_TAGS)
+          elif [[ "${{ matrix.legacy_win7 }}" == "true" ]]; then
+            TAGS=$(sed 's/,with_usbip//' release/DEFAULT_BUILD_TAGS_OTHERS)
           else
             TAGS=$(cat release/DEFAULT_BUILD_TAGS_OTHERS)
           fi
@@ -260,7 +262,7 @@ jobs:
           CRONET_GO_VERSION=$(cat .github/CRONET_GO_VERSION)
           LIBRARY_PATH="lib/${{ matrix.os }}_${{ matrix.arch }}/libcronet.so"
           git init "$RUNNER_TEMP/cronet-go-lib"
-          git -C "$RUNNER_TEMP/cronet-go-lib" remote add origin https://github.com/sagernet/cronet-go.git
+          git -C "$RUNNER_TEMP/cronet-go-lib" remote add origin https://github.com/MiChongs/cronet-go.git
           git -C "$RUNNER_TEMP/cronet-go-lib" sparse-checkout set --no-cone "/$LIBRARY_PATH"
           git -C "$RUNNER_TEMP/cronet-go-lib" fetch --depth=1 --filter=blob:none origin "$CRONET_GO_VERSION"
           git -C "$RUNNER_TEMP/cronet-go-lib" checkout FETCH_HEAD
@@ -462,7 +464,7 @@ jobs:
       - name: Cleanup
         run: rm -f dist/sing-box dist/libcronet.so
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: binary-${{ matrix.os }}_${{ matrix.arch }}${{ matrix.goarm && format('v{0}', matrix.goarm) }}${{ matrix.go386 && format('_{0}', matrix.go386) }}${{ matrix.gomips && format('_{0}', matrix.gomips) }}${{ matrix.legacy_name && format('-legacy-{0}', matrix.legacy_name) }}${{ matrix.variant && format('-{0}', matrix.variant) }}
           path: "dist"
@@ -486,9 +488,9 @@ jobs:
           fetch-depth: 1
       - name: Setup Go
         if: ${{ ! matrix.legacy_osx }}
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: 1.26.8
+          go-version: 1.26.10
           cache: false
       - name: Cache Go modules
         uses: actions/cache/restore@v4
@@ -503,7 +505,7 @@ jobs:
         with:
           path: |
             ~/go/go_osx
-          key: go_osx_1268
+          key: go_osx_12610
       - name: Setup Go for macOS 10.13
         if: matrix.legacy_osx && steps.cache-go-for-macos1013.outputs.cache-hit != 'true'
         env:
@@ -563,7 +565,7 @@ jobs:
       - name: Cleanup
         run: rm dist/sing-box
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: binary-darwin_${{ matrix.arch }}${{ matrix.legacy_name && format('-legacy-{0}', matrix.legacy_name) }}
           path: "dist"
@@ -585,10 +587,14 @@ jobs:
         with:
           fetch-depth: 1
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: 1.26.8
+          go-version: 1.26.10
           cache: false
+      - name: Patch Go for Windows ARM64
+        if: matrix.arch == 'arm64'
+        shell: bash
+        run: .github/patch_go_for_windows_arm64.sh
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
@@ -633,7 +639,7 @@ jobs:
           $CRONET_GO_VERSION = Get-Content .github/CRONET_GO_VERSION
           $LIBRARY_PATH = "lib/windows_${{ matrix.arch }}/libcronet.dll"
           git init "$env:RUNNER_TEMP/cronet-go-lib"
-          git -C "$env:RUNNER_TEMP/cronet-go-lib" remote add origin https://github.com/sagernet/cronet-go.git
+          git -C "$env:RUNNER_TEMP/cronet-go-lib" remote add origin https://github.com/MiChongs/cronet-go.git
           git -C "$env:RUNNER_TEMP/cronet-go-lib" sparse-checkout set --no-cone "/$LIBRARY_PATH"
           git -C "$env:RUNNER_TEMP/cronet-go-lib" fetch --depth=1 --filter=blob:none origin "$CRONET_GO_VERSION"
           git -C "$env:RUNNER_TEMP/cronet-go-lib" checkout FETCH_HEAD
@@ -664,7 +670,7 @@ jobs:
         if: ${{ !matrix.naive }}
         run: Remove-Item dist/sing-box.exe
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: binary-windows_${{ matrix.arch }}
           path: "dist"
@@ -688,9 +694,9 @@ jobs:
         with:
           fetch-depth: 1
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: 1.26.8
+          go-version: 1.26.10
           cache: false
       - name: Cache Go modules
         uses: actions/cache@v4
@@ -722,7 +728,7 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
       - name: Upload library
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: libbox-android-${{ matrix.go_arch }}
           path: dist
@@ -752,9 +758,9 @@ jobs:
       - name: Checkout Android client
         run: git submodule update --init clients/android
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: 1.26.8
+          go-version: 1.26.10
           cache: false
       - name: Cache Go modules
         uses: actions/cache/restore@v4
@@ -841,7 +847,7 @@ jobs:
           EOF
           cat dist/SFA-version-metadata.json
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: binary-android-apks-${{ matrix.variant }}
           path: 'dist'
@@ -860,9 +866,9 @@ jobs:
       - name: Checkout Android client
         run: git submodule update --init clients/android
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: 1.26.8
+          go-version: 1.26.10
           cache: false
       - name: Cache Go modules
         uses: actions/cache/restore@v4
@@ -973,10 +979,14 @@ jobs:
       - name: Checkout desktop submodules
         run: git -C clients/desktop submodule update --init --recursive
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: 1.26.8
+          go-version: 1.26.10
           cache: false
+      - name: Patch Go for Windows ARM64
+        if: matrix.desktop_arch == 'arm64'
+        shell: bash
+        run: .github/patch_go_for_windows_arm64.sh
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
@@ -1053,7 +1063,7 @@ jobs:
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item $artifacts.FullName dist
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: binary-windows-client-${{ matrix.desktop_arch }}
           path: 'dist'
@@ -1085,9 +1095,9 @@ jobs:
       - name: Checkout desktop submodules
         run: git -C clients/desktop submodule update --init --recursive
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: 1.26.8
+          go-version: 1.26.10
           cache: false
       - name: Cache Go modules
         uses: actions/cache@v4
@@ -1141,7 +1151,7 @@ jobs:
           set -xeuo pipefail
           CRONET_GO_VERSION=$(cat .github/CRONET_GO_VERSION)
           git init ~/cronet-go
-          git -C ~/cronet-go remote add origin https://github.com/sagernet/cronet-go.git
+          git -C ~/cronet-go remote add origin https://github.com/MiChongs/cronet-go.git
           git -C ~/cronet-go fetch --depth=1 origin "$CRONET_GO_VERSION"
           git -C ~/cronet-go checkout FETCH_HEAD
           git -C ~/cronet-go submodule update --init --recursive --depth=1
@@ -1225,7 +1235,7 @@ jobs:
           mkdir -p dist
           cp "${artifacts[@]}" dist
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: binary-linux-client-${{ matrix.desktop_arch }}
           path: 'dist'
@@ -1259,9 +1269,9 @@ jobs:
           fetch-depth: 1
       - name: Setup Go
         if: matrix.build
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: 1.26.8
+          go-version: 1.26.10
           cache: false
       - name: Patch Go for iOS
         if: matrix.build && (matrix.platform == 'ios/arm64' || matrix.platform == 'tvos/arm64')
@@ -1278,8 +1288,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/Library/Caches/go-build
-          key: libbox-go-build-${{ matrix.artifact }}-1.26.8-${{ hashFiles('go.sum') }}
-          restore-keys: libbox-go-build-${{ matrix.artifact }}-1.26.8-
+          key: libbox-go-build-${{ matrix.artifact }}-1.26.10-${{ hashFiles('go.sum') }}
+          restore-keys: libbox-go-build-${{ matrix.artifact }}-1.26.10-
       - name: Set tag
         if: matrix.build
         run: git tag v${{ needs.calculate_version.outputs.version }} -f
@@ -1295,7 +1305,7 @@ jobs:
           tar -cf dist/Libbox-${{ matrix.artifact }}.tar Libbox.xcframework
       - name: Upload library
         if: matrix.build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: libbox-apple-${{ matrix.artifact }}
           path: dist
@@ -1346,9 +1356,9 @@ jobs:
         run: git submodule update --init --recursive clients/apple
       - name: Setup Go
         if: matrix.if
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: 1.26.8
+          go-version: 1.26.10
           cache: false
       - name: Cache Go modules
         if: matrix.if
@@ -1627,7 +1637,7 @@ jobs:
         run: rm -rf "$RUNNER_TEMP/SourcePackages/repositories"
       - name: Upload release artifact
         if: matrix.if && (matrix.type == 'standalone' || matrix.type == 'jailbreak')
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: binary-apple-${{ matrix.type }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
           path: 'dist'

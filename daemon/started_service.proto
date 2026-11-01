@@ -22,6 +22,7 @@ service StartedService {
   rpc SelectOutbound(SelectOutboundRequest) returns (google.protobuf.Empty) {}
   rpc SetGroupExpand(SetGroupExpandRequest) returns (google.protobuf.Empty) {}
 
+
   rpc SubscribeConnections(SubscribeConnectionsRequest) returns(stream ConnectionEvents) {}
   rpc CloseConnection(CloseConnectionRequest) returns(google.protobuf.Empty) {}
   rpc CloseAllConnections(google.protobuf.Empty) returns(google.protobuf.Empty) {}
@@ -153,6 +154,7 @@ message ClashModeStatus {
   repeated string modeList = 1;
   string currentMode = 2;
 }
+
 
 message SubscribeConnectionsRequest {
   int64 interval = 1;

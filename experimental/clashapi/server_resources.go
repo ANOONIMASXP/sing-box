@@ -12,7 +12,6 @@ import (
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/interrupt"
-	"github.com/sagernet/sing-box/experimental/deprecated"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
@@ -57,13 +56,9 @@ func (s *Server) checkAndDownloadExternalUI(update bool) error {
 }
 
 func (s *Server) downloadExternalUI() error {
-	transport := s.externalUITransport
-	if transport == nil {
-		var err error
-		transport, err = s.resolveExternalUITransport()
-		if err != nil {
-			return E.Cause(err, "create external UI http client")
-		}
+	transport, err := s.resolveExternalUITransport()
+	if err != nil {
+		return E.Cause(err, "create external UI http client")
 	}
 	httpClient := &http.Client{Transport: transport}
 	defer httpClient.CloseIdleConnections()
@@ -152,12 +147,11 @@ func (s *Server) resolveExternalUITransport() (adapter.HTTPTransport, error) {
 	contextLogger := s.logger.(log.ContextLogger)
 	if s.externalUIHTTPClient != nil && !s.externalUIHTTPClient.IsEmpty() {
 		if s.externalUIDownloadDetour != "" { //nolint:staticcheck
-			return nil, E.New("external_ui_http_client conflicts with deprecated external_ui_download_detour field")
+			return nil, E.New("external_ui_http_client is conflict with deprecated external_ui_download_detour field")
 		}
 		return httpClientManager.ResolveTransport(s.ctx, contextLogger, *s.externalUIHTTPClient)
 	}
 	if s.externalUIDownloadDetour != "" { //nolint:staticcheck
-		deprecated.Report(s.ctx, deprecated.OptionLegacyClashAPIExternalUIDownloadDetour)
 		return httpClientManager.ResolveTransport(s.ctx, contextLogger, option.HTTPClientOptions{
 			DialerOptions: option.DialerOptions{
 				Detour: s.externalUIDownloadDetour, //nolint:staticcheck

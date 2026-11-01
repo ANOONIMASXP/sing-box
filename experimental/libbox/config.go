@@ -260,6 +260,8 @@ func (s *interfaceMonitorStub) MyInterfaces() []string {
 	return nil
 }
 
+func (s *interfaceMonitorStub) ForceUpdate() {}
+
 func GenerateConfigSchema() (*StringBox, error) {
 	content, err := schema.Generate(baseContext(nil), reflect.TypeFor[option.Options]())
 	if err != nil {

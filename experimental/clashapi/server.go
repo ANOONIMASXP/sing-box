@@ -16,16 +16,22 @@ import (
 
 	"github.com/sagernet/cors"
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/common/dialer"
 	"github.com/sagernet/sing-box/common/trafficcontrol"
 	"github.com/sagernet/sing-box/common/urltest"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/experimental"
 	"github.com/sagernet/sing-box/experimental/clashmode"
+	"github.com/sagernet/sing-box/experimental/deprecated"
 	"github.com/sagernet/sing-box/experimental/observability"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing/common"
+	"github.com/sagernet/sing/common/cleanup"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json"
+	M "github.com/sagernet/sing/common/metadata"
+	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
 	"github.com/sagernet/sing/service/filemanager"
 	"github.com/sagernet/ws"
@@ -56,13 +62,13 @@ type Server struct {
 	urlTestHistory *urltest.HistoryStorage
 	clashMode      *clashmode.Manager
 	logDebug       bool
+	cleaner        *cleanup.Cleaner
 
 	externalController        bool
 	externalUI                string
 	externalUIDownloadURL     string
 	externalUIDownloadURLHash [32]byte
 	externalUIHTTPClient      *option.HTTPClientOptions
-	externalUITransport       adapter.HTTPTransport
 	externalUIDownloadDetour  string
 	externalUIUpdateInterval  time.Duration
 	cacheFile                 adapter.CacheFile
@@ -122,6 +128,7 @@ func NewServer(ctx context.Context, logFactory log.ObservableFactory, options op
 
 		//nolint:staticcheck
 		externalUIDownloadDetour: options.ExternalUIDownloadDetour,
+		cleaner:                  cleanup.Add(trafficManager.Clear),
 	}
 	//goland:noinspection GoDeprecation
 	//nolint:staticcheck
@@ -158,12 +165,8 @@ func NewServer(ctx context.Context, logFactory log.ObservableFactory, options op
 		r.Mount("/script", scriptRouter())
 		r.Mount("/profile", profileRouter())
 		r.Mount("/cache", cacheRouter(ctx))
-		r.Mount("/dns", dnsRouter(s.dnsRouter))
+		r.Mount("/dns", dnsRouter(s.dnsRouter, dialer.TCPConcurrentFromContext(s.ctx)))
 		r.Mount("/smart", smartRouter(ctx))
-
-		if service.FromContext[adapter.PlatformInterface](ctx) == nil {
-			r.Mount("/restart", restartRouter(ctx, logFactory))
-		}
 
 		if service.FromContext[adapter.PlatformInterface](ctx) == nil {
 			r.Mount("/restart", restartRouter(ctx, logFactory))
@@ -191,20 +194,23 @@ func (s *Server) Name() string {
 
 func (s *Server) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	switch stage {
+	case adapter.StartStateInitialize:
+		scope.Add(func() error {
+			return common.Close(
+				common.PtrOrNil(s.urlTestHistory),
+				common.PtrOrNil(s.cleaner),
+			)
+		})
 	case adapter.StartStateStart:
-		if s.externalController && s.externalUI != "" {
-			transport, err := s.resolveExternalUITransport()
-			if err != nil {
-				return E.Cause(err, "create external UI http client")
-			}
-			s.externalUITransport = transport
+		if s.externalUIDownloadDetour != "" && (s.externalUIHTTPClient == nil || s.externalUIHTTPClient.IsEmpty()) {
+			deprecated.Report(s.ctx, deprecated.OptionLegacyClashAPIExternalUIDownloadDetour)
 		}
 	case adapter.StartStateStarted:
 		if !s.externalController {
 			break
 		}
 		s.ctx, s.updateCancel = context.WithCancel(s.ctx)
-		scope.Add(s.closeUpdate)
+		scope.Add(s.stopExternalUIUpdate)
 		var forceUpdate bool
 		if s.externalUI != "" && s.cacheFile != nil {
 			if savedExternalUI := s.cacheFile.LoadExternalUI("ExternalUI"); savedExternalUI != nil {
@@ -227,7 +233,7 @@ func (s *Server) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 			err      error
 		)
 		for range 3 {
-			listener, err = net.Listen("tcp", s.httpServer.Addr)
+			listener, err = net.Listen(M.NetworkFromNetAddr(N.NetworkTCP, M.ParseSocksaddr(s.httpServer.Addr).Addr), s.httpServer.Addr)
 			if runtime.GOOS == "android" && errors.Is(err, syscall.EADDRINUSE) {
 				time.Sleep(100 * time.Millisecond)
 				continue
@@ -273,7 +279,7 @@ func (s *Server) loopUpdate() {
 	}
 }
 
-func (s *Server) closeUpdate() error {
+func (s *Server) stopExternalUIUpdate() error {
 	if s.updateCancel != nil {
 		s.updateCancel()
 	}

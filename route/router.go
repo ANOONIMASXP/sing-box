@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/common/dialer"
 	"github.com/sagernet/sing-box/common/expiringmap"
 	"github.com/sagernet/sing-box/common/process"
 	"github.com/sagernet/sing-box/common/taskmonitor"
@@ -28,30 +29,29 @@ import (
 var _ adapter.Router = (*Router)(nil)
 
 type Router struct {
-	ctx               context.Context
-	logger            log.ContextLogger
-	inbound           adapter.InboundManager
-	outbound          adapter.OutboundManager
-	dns               adapter.DNSRouter
-	dnsTransport      adapter.DNSTransportManager
-	connection        adapter.ConnectionManager
-	network           adapter.NetworkManager
-	httpClientManager adapter.HTTPClientManager
-	rules             []adapter.Rule
-	ruleByUUID        map[string]adapter.Rule
-	needFindProcess   bool
-	needFindNeighbor  bool
-	leaseFiles        []string
-	ruleSets          []adapter.RuleSet
-	ruleSetMap        map[string]adapter.RuleSet
-	ruleSetUpdater    *R.RuleSetUpdater
-	processSearcher   process.Searcher
-	processCache      *freelru.Cache[processCacheKey, processCacheEntry]
-	neighborResolver  adapter.NeighborResolver
-	pauseManager      pause.Manager
-	trackers          []adapter.ConnectionTracker
-	platformInterface adapter.PlatformInterface
-
+	ctx                    context.Context
+	logger                 log.ContextLogger
+	inbound                adapter.InboundManager
+	outbound               adapter.OutboundManager
+	dns                    adapter.DNSRouter
+	dnsTransport           adapter.DNSTransportManager
+	connection             adapter.ConnectionManager
+	network                adapter.NetworkManager
+	httpClientManager      adapter.HTTPClientManager
+	rules                  []adapter.Rule
+	ruleByUUID             map[string]adapter.Rule
+	needFindProcess        bool
+	needFindNeighbor       bool
+	leaseFiles             []string
+	ruleSets               []adapter.RuleSet
+	ruleSetMap             map[string]adapter.RuleSet
+	ruleSetUpdater         *R.RuleSetUpdater
+	processSearcher        process.Searcher
+	processCache           *freelru.Cache[processCacheKey, processCacheEntry]
+	neighborResolver       adapter.NeighborResolver
+	pauseManager           pause.Manager
+	trackers               []adapter.ConnectionTracker
+	platformInterface      adapter.PlatformInterface
 	processLookupMode      process.LookupMode
 	processCacheGeneration atomic.Uint64
 
@@ -80,6 +80,7 @@ func NewRouter(ctx context.Context, logFactory log.Factory, options option.Route
 		pauseManager:      service.FromContext[pause.Manager](ctx),
 		platformInterface: service.FromContext[adapter.PlatformInterface](ctx),
 
+		quicSniffCache:             expiringmap.New[quicSniffCacheKey, string](quicSniffCacheTTL),
 		defaultDomainMatchStrategy: C.DomainMatchStrategy(options.DefaultDomainMatchStrategy),
 		reloadChan:                 reloadChan,
 	}
@@ -122,7 +123,6 @@ func (r *Router) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	monitor := taskmonitor.New(r.logger, C.StartTimeout)
 	switch stage {
 	case adapter.StartStateInitialize:
-		r.quicSniffCache = expiringmap.New[quicSniffCacheKey, string](quicSniffCacheTTL)
 		scope.Add(func() error {
 			r.quicSniffCache.Close()
 			return nil
@@ -194,6 +194,7 @@ func (r *Router) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 		}
 		r.network.Initialize(r.ruleSets)
 		needFindProcess := r.needFindProcess
+		needFindNeighbor := r.needFindNeighbor
 		for _, ruleSet := range r.ruleSets {
 			metadata := ruleSet.Metadata()
 			if metadata.ContainsProcessRule {
@@ -232,6 +233,44 @@ func (r *Router) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 			processCache.SetLifetime(200 * time.Millisecond)
 			r.processCache = processCache
 		}
+		r.needFindNeighbor = needFindNeighbor
+		if needFindNeighbor {
+			if r.platformInterface != nil && r.platformInterface.UsePlatformNeighborResolver() {
+				monitor.Start("initialize neighbor resolver")
+				resolver := newPlatformNeighborResolver(r.logger, r.platformInterface)
+				err := resolver.Start()
+				monitor.Finish()
+				if err != nil {
+					r.logger.Error(E.Cause(err, "start neighbor resolver"))
+				} else {
+					r.neighborResolver = resolver
+				}
+			}
+			// Native lease-file-backed resolver as a fallback —
+			// upstream 11783aa54 added the nil-check so macOS falls
+			// through when the platform binding isn't available.
+			// The "else" pre-existing in HEAD was narrower (only ran
+			// when UsePlatformNeighborResolver=false); merging gives
+			// us double-protection: platform-first, else-or-failed
+			// path tries the native resolver.
+			if r.neighborResolver == nil {
+				monitor.Start("initialize neighbor resolver")
+				resolver, err := newNeighborResolver(r.logger, r.leaseFiles)
+				monitor.Finish()
+				if err != nil {
+					if err != os.ErrInvalid {
+						r.logger.Error(E.Cause(err, "create neighbor resolver"))
+					}
+				} else {
+					err = resolver.Start()
+					if err != nil {
+						r.logger.Error(E.Cause(err, "start neighbor resolver"))
+					} else {
+						r.neighborResolver = resolver
+					}
+				}
+			}
+		}
 	case adapter.StartStatePostStart:
 		for i, rule := range r.rules {
 			scope.Add(rule.Close)
@@ -255,7 +294,9 @@ func (r *Router) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	return nil
 }
 
-func (r *Router) RuleSets() []adapter.RuleSet { return r.ruleSets }
+func (r *Router) RuleSets() []adapter.RuleSet {
+	return r.ruleSets
+}
 
 func (r *Router) RuleSet(tag string) (adapter.RuleSet, bool) {
 	ruleSet, loaded := r.ruleSetMap[tag]
@@ -286,6 +327,8 @@ func (r *Router) ResetNetwork() {
 	r.processCacheGeneration.Add(1)
 	r.httpClientManager.ResetNetwork()
 	r.dns.ResetNetwork()
+	// Winning and failed addresses describe the previous network.
+	dialer.TCPConcurrentFromContext(r.ctx).ResetHistory()
 	if r.processCache != nil {
 		r.processCache.Purge()
 	}

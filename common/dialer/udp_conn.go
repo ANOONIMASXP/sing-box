@@ -6,7 +6,6 @@ import (
 	"syscall"
 
 	"github.com/sagernet/sing/common"
-	"github.com/sagernet/sing/common/control"
 	N "github.com/sagernet/sing/common/network"
 )
 
@@ -20,7 +19,7 @@ func (c *udpConn) Read(b []byte) (n int, err error) {
 	if n == 0 && err == nil {
 		var isEOF bool
 		c.rawConn.Control(func(fd uintptr) {
-			isEOF = control.IsUDPEOF(fd)
+			isEOF = isUDPEOF(fd)
 		})
 		if isEOF {
 			err = io.EOF

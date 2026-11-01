@@ -20,6 +20,16 @@ type Outbound interface {
 	N.Dialer
 }
 
+// TransportOutbound is implemented by outbounds that carry their protocol over
+// a configurable stream transport: a V2Ray transport, or the v2ray-plugin of
+// Shadowsocks. Groups use it to filter provider nodes by transport.
+type TransportOutbound interface {
+	Outbound
+	// TransportType is the V2Ray transport type ("ws", "grpc", "http",
+	// "httpupgrade", "quic", "xhttp" ...), or "tcp" when none is configured.
+	TransportType() string
+}
+
 type OutboundWithPreferredRoutes interface {
 	Outbound
 	PreferredDomain(metadata *InboundContext, domain string) bool
@@ -53,6 +63,9 @@ type OutboundManager interface {
 	Outbound(tag string) (Outbound, bool)
 	Default() Outbound
 	Create(ctx context.Context, router Router, logger log.ContextLogger, tag string, outboundType string, options any) error
+	OutboundOption(tag string) (option.Outbound, bool)
+	RegisterOutbound(outbound Outbound) error
+	UnregisterOutbound(tag string) error
 }
 
 type IdleConnectionKeeper interface {

@@ -32,9 +32,10 @@ type Options struct {
 // TODO: merge with NewWithOptions
 func New(ctx context.Context, options option.DialerOptions, remoteIsDomain bool) (N.Dialer, error) {
 	return NewWithOptions(Options{
-		Context:        ctx,
-		Options:        options,
-		RemoteIsDomain: remoteIsDomain,
+		Context:          ctx,
+		Options:          options,
+		RemoteIsDomain:   remoteIsDomain,
+		ResolverOnDetour: options.ResolverOnDetour,
 	})
 }
 
@@ -101,6 +102,7 @@ func NewWithOptions(options Options) (N.Dialer, error) {
 			dnsQueryOptions,
 			time.Duration(dialOptions.FallbackDelay),
 		)
+		setTCPConcurrentOverride(dialer, dialOptions.TCPConcurrent)
 	}
 	return dialer, nil
 }

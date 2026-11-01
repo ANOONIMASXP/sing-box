@@ -2,6 +2,7 @@ package clashapi
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"sort"
 	"strconv"
@@ -227,17 +228,28 @@ func proxyInfo(server *Server, detour adapter.Outbound) *badjson.JSONObject {
 	switch detour.Type() {
 	case C.TypeBlock:
 		clashType = "Reject"
+	case C.TypeNested:
+		clashType = "Nested"
 	default:
 		clashType = C.ProxyDisplayName(detour.Type())
 	}
 	info.Put("type", clashType)
 	info.Put("name", detour.Tag())
-	info.Put("udp", common.Contains(detour.Network(), N.NetworkUDP))
+	udpTag := group.RealTag(detour, N.NetworkUDP)
+	info.Put("udp", common.Contains(detour.Network(), N.NetworkUDP) && !urltest.UDPUnavailable(server.urlTestHistory, udpTag))
+	if udpHistory := server.urlTestHistory.LoadUDPTestHistory(udpTag); udpHistory != nil {
+		info.Put("udpTest", udpHistory)
+	}
 	delayHistory := server.urlTestHistory.LoadURLTestHistory(group.RealTag(detour, N.NetworkTCP))
 	if delayHistory != nil {
 		info.Put("history", []*adapter.URLTestHistory{delayHistory})
+		// Alive: history exists and is fresh (within 10 minutes)
+		info.Put("alive", time.Since(delayHistory.Time) < 10*time.Minute)
+		info.Put("delay", delayHistory.Delay)
 	} else {
 		info.Put("history", []*adapter.URLTestHistory{})
+		info.Put("alive", false)
+		info.Put("delay", 0)
 	}
 	if groupOutbound, isGroup := detour.(adapter.OutboundGroup); isGroup {
 		var now string
@@ -363,6 +375,8 @@ func getProxies(server *Server) func(w http.ResponseWriter, r *http.Request) {
 			"name":    "GLOBAL",
 			"udp":     true,
 			"history": []*adapter.URLTestHistory{},
+			"alive":   true,
+			"delay":   0,
 			"all":     allProxies,
 			"now":     defaultTag,
 		})
@@ -445,9 +459,15 @@ func updateProxy(w http.ResponseWriter, r *http.Request) {
 			render.JSON(w, r, newError("URLTest update error: not found"))
 			return
 		}
+	case *group.Nested:
+		if !p.SelectOutbound(req.Name) {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, newError("Nested update error: not found"))
+			return
+		}
 	default:
 		render.Status(r, http.StatusBadRequest)
-		render.JSON(w, r, newError("Must be a Selector, Smart, smart-region, or URLTest"))
+		render.JSON(w, r, newError("Must be a Selector, Nested, Smart, smart-region, or URLTest"))
 		return
 	}
 
@@ -485,8 +505,8 @@ func getProxyDelay(server *Server) func(w http.ResponseWriter, r *http.Request) 
 		if strings.HasPrefix(url, "http://") {
 			url = ""
 		}
-		timeout, err := strconv.ParseInt(query.Get("timeout"), 10, 16)
-		if err != nil {
+		timeout, err := strconv.ParseInt(query.Get("timeout"), 10, 32)
+		if err != nil || timeout <= 0 {
 			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, ErrBadRequest)
 			return
@@ -503,42 +523,43 @@ func getProxyDelay(server *Server) func(w http.ResponseWriter, r *http.Request) 
 		// uses), and explicit unpin is available via DELETE /proxies/<tag>
 		// or PUT {"name":""} when the user really wants it.
 
+		realTag := group.RealTag(proxy, N.NetworkTCP)
 		ctx, cancel := context.WithTimeout(urltest.ContextWithUnifiedDelay(r.Context(), urltest.UnifiedDelayFromContext(server.ctx)), time.Millisecond*time.Duration(timeout))
 		defer cancel()
-
-		delay, err := urltest.URLTest(ctx, url, proxy)
-		defer func() {
-			realTag := group.RealTag(proxy, N.NetworkTCP)
-			if err != nil {
-				server.urlTestHistory.DeleteURLTestHistory(realTag)
+		// Each probe is a connection through the node, which nodes billed per
+		// request pay for, so there is no resampling; a probe of the same node
+		// and URL already running is joined.
+		result := server.urlTestHistory.Prober().Probe(ctx, urltest.ProbeRequest{
+			Tag:    realTag,
+			Link:   url,
+			Dialer: proxy,
+			Since:  time.Now(),
+		})
+		if result.Err != nil {
+			if ctx.Err() != nil || errors.Is(result.Err, context.DeadlineExceeded) {
+				render.Status(r, http.StatusGatewayTimeout)
+				render.JSON(w, r, ErrRequestTimeout)
 			} else {
-				server.urlTestHistory.StoreURLTestHistory(realTag, &adapter.URLTestHistory{
-					Time:  time.Now(),
-					Delay: delay,
-				})
+				render.Status(r, http.StatusServiceUnavailable)
+				render.JSON(w, r, newError("An error occurred in the delay test"))
 			}
-			for _, detour := range server.outbound.Outbounds() {
-				urlTestGroup, isURLTestGroup := detour.(adapter.URLTestGroup)
-				if !isURLTestGroup {
-					continue
-				}
-				if !groupContains(server.outbound, urlTestGroup, realTag, map[string]bool{detour.Tag(): true}) {
-					continue
-				}
-				urlTestGroup.PerformUpdateCheck()
-			}
-		}()
-
-		if ctx.Err() != nil {
-			render.Status(r, http.StatusGatewayTimeout)
-			render.JSON(w, r, ErrRequestTimeout)
 			return
 		}
+		delay := result.Delay
 
-		if err != nil || delay == 0 {
-			render.Status(r, http.StatusServiceUnavailable)
-			render.JSON(w, r, newError("An error occurred in the delay test"))
-			return
+		server.urlTestHistory.StoreURLTestHistory(realTag, &adapter.URLTestHistory{
+			Time:  result.Time,
+			Delay: delay,
+		})
+		for _, detour := range server.outbound.Outbounds() {
+			urlTestGroup, isURLTestGroup := detour.(adapter.URLTestGroup)
+			if !isURLTestGroup {
+				continue
+			}
+			if !groupContains(server.outbound, urlTestGroup, realTag, map[string]bool{detour.Tag(): true}) {
+				continue
+			}
+			urlTestGroup.PerformUpdateCheck()
 		}
 
 		render.JSON(w, r, render.M{

@@ -39,9 +39,6 @@ func reload(server *Server) func(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		render.NoContent(w, r)
-		if err := http.NewResponseController(w).Flush(); err != nil {
-			return
-		}
 		server.logger.Warn("sing-box reloading...")
 		server.router.Reload()
 	}

@@ -5,13 +5,16 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/urltest"
 	"github.com/sagernet/sing-box/protocol/group"
 	"github.com/sagernet/sing/common"
+	"github.com/sagernet/sing/common/batch"
 	"github.com/sagernet/sing/common/json/badjson"
+	N "github.com/sagernet/sing/common/network"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
@@ -20,10 +23,13 @@ import (
 func groupRouter(server *Server) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", getGroups(server))
+	// mihomo Smart: every Smart group's ranking.
+	r.Get("/weights", getAllSmartWeights(server.ctx))
 	r.Route("/{name}", func(r chi.Router) {
 		r.Use(parseProxyName, findProxyByName(server))
 		r.Get("/", getGroup(server))
 		r.Get("/delay", getGroupDelay(server))
+		r.Get("/weights", getSmartGroupWeights)
 	})
 	return r
 }
@@ -84,12 +90,16 @@ func getGroupDelay(server *Server) func(w http.ResponseWriter, r *http.Request) 
 			result, err = urlTestGroup.URLTest(ctx)
 		} else if loadBalanceGroup, isLoadBalanceGroup := outboundGroup.(adapter.LoadBalanceGroup); isLoadBalanceGroup {
 			result, err = loadBalanceGroup.URLTest(ctx)
+		} else if smartGroup, isSmart := outboundGroup.(*group.Smart); isSmart {
+			// mihomo releases a Smart group's fixed member on a group test;
+			// the results refresh the members' health (testGroupMembers
+			// already stores per-member histories in urlTestHistory, which
+			// the local Smart engine reads).
+			smartGroup.SelectOutbound("")
+			result = testGroupMembers(ctx, server, outboundGroup, url)
 		} else {
-			outbounds := common.FilterNotNil(common.Map(outboundGroup.All(), func(it string) adapter.Outbound {
-				itOutbound, _ := server.outbound.Outbound(it)
-				return itOutbound
-			}))
-			result = group.URLTestOutbounds(ctx, server.outbound, server.urlTestHistory, server.logger, outbounds, url, 0, true)
+			// Selector or other groups: test members with controlled concurrency
+			result = testGroupMembers(ctx, server, outboundGroup, url)
 		}
 
 		if err != nil {
@@ -100,4 +110,65 @@ func getGroupDelay(server *Server) func(w http.ResponseWriter, r *http.Request) 
 
 		render.JSON(w, r, result)
 	}
+}
+
+// testGroupMembers tests all members of a non-URLTest/LoadBalance group (e.g. Selector)
+// with controlled concurrency for accurate results.
+func testGroupMembers(ctx context.Context, server *Server, outboundGroup adapter.OutboundGroup, url string) map[string]uint16 {
+	outbounds := common.FilterNotNil(common.Map(outboundGroup.All(), func(it string) adapter.Outbound {
+		itOutbound, _ := server.outbound.Outbound(it)
+		return itOutbound
+	}))
+
+	// Use concurrency 4 for accuracy — avoids bandwidth competition
+	concurrency := 4
+	if len(outbounds) < concurrency {
+		concurrency = len(outbounds)
+	}
+	if concurrency < 1 {
+		concurrency = 1
+	}
+	b, _ := batch.New(ctx, batch.WithConcurrencyNum[any](concurrency))
+	since := time.Now()
+	checked := make(map[string]bool, len(outbounds))
+	result := make(map[string]uint16, len(outbounds))
+	var resultAccess sync.Mutex
+
+	for _, detour := range outbounds {
+		tag := detour.Tag()
+		realTag := group.RealTag(detour, N.NetworkTCP)
+		if checked[realTag] {
+			continue
+		}
+		checked[realTag] = true
+		p, loaded := server.outbound.Outbound(realTag)
+		if !loaded {
+			continue
+		}
+		b.Go(realTag, func() (any, error) {
+			probeResult := server.urlTestHistory.Prober().Probe(ctx, urltest.ProbeRequest{
+				Tag:    realTag,
+				Link:   url,
+				Dialer: p,
+				Since:  since,
+			})
+			t, testErr := probeResult.Delay, probeResult.Err
+			if testErr != nil {
+				server.logger.Debug("outbound ", tag, " unavailable: ", testErr)
+				// Don't delete history on single API test failure — let periodic checks handle it
+			} else {
+				server.logger.Debug("outbound ", tag, " available: ", t, "ms")
+				server.urlTestHistory.StoreURLTestHistory(realTag, &adapter.URLTestHistory{
+					Time:  probeResult.Time,
+					Delay: t,
+				})
+				resultAccess.Lock()
+				result[tag] = t
+				resultAccess.Unlock()
+			}
+			return nil, nil
+		})
+	}
+	b.Wait()
+	return result
 }

@@ -13,11 +13,13 @@ import (
 )
 
 type TailscaleEndpointOptions struct {
+	// Deprecated: use control_http_client instead
 	DialerOptions
 	InnerDomainResolver        *DomainResolveOptions      `json:"inner_domain_resolver,omitempty"`
 	StateDirectory             string                     `json:"state_directory,omitempty"`
 	AuthKey                    string                     `json:"auth_key,omitempty"`
 	ControlURL                 string                     `json:"control_url,omitempty"`
+	ControlHTTPClient          *HTTPClientOptions         `json:"control_http_client,omitempty"`
 	Ephemeral                  bool                       `json:"ephemeral,omitempty"`
 	Hostname                   string                     `json:"hostname,omitempty"`
 	AcceptRoutes               bool                       `json:"accept_routes,omitempty"`
@@ -173,17 +175,10 @@ type _DERPSTUNListenOptions struct {
 type DERPSTUNListenOptions _DERPSTUNListenOptions
 
 func (d DERPSTUNListenOptions) MarshalJSON() ([]byte, error) {
-	portOptions := _DERPSTUNListenOptions{
-		Enabled: d.Enabled,
-		ListenOptions: ListenOptions{
-			ListenPort: d.ListenPort,
-		},
+	if d.Enabled && d.ListenPort != 0 && d.ListenOptions == (ListenOptions{ListenPort: d.ListenPort}) {
+		return json.Marshal(d.ListenPort)
 	}
-	if _DERPSTUNListenOptions(d) == portOptions {
-		return json.Marshal(d.Enabled)
-	} else {
-		return json.Marshal(_DERPSTUNListenOptions(d))
-	}
+	return json.Marshal(_DERPSTUNListenOptions(d))
 }
 
 func (d *DERPSTUNListenOptions) UnmarshalJSON(bytes []byte) error {

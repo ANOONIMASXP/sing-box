@@ -84,6 +84,50 @@
     `/observability/v1` HTTP API is mounted on this controller and protected by
     the same `secret`.
 
+!!! info "Rule statistics"
+
+    `GET /rules` lists route rules followed by DNS rules. `type` uses mihomo
+    rule types (`DomainSuffix`, `IPCIDR`, `RuleSet`, `InName`, `DstPort`, ...;
+    `ip_is_private` is shown as `GeoIP` `lan`, conditions without a mihomo
+    equivalent use the camel-cased field name such as `ClashMode`), and
+    `payload` lists the values separated by `, `, e.g. `DomainSuffix`
+    `google.com, youtube.com`.
+
+    A rule with several conditions has the type `AND`, `OR` or `NOT`, and its
+    payload is an expression of `Type(values)` joined by `&` (and) or `|` (or),
+    with parentheses around nested groups, e.g. `AND`
+    `Network(tcp) & (DomainSuffix(a.com) | IPCIDR(1.1.1.1/32))`. Nested
+    `AND` / `OR` (including logical rules) are flattened and the values of the
+    same condition type within an `OR` are merged, so `OR` only lists different
+    condition types. A rule without conditions is `Match`.
+
+    `proxy` is the target outbound or DNS server tag, or the upper-cased action
+    name for other actions (`REJECT`, `REJECT-DROP`, `SNIFF`, `HIJACK-DNS`,
+    ...). The `rule` and `rulePayload` of `/connections` use the same format,
+    and `Match` when the connection went to `route.final`.
+
+    Like mihomo, each rule reports `index`, `size` and `extra` (`disabled`,
+    `hitCount`, `hitAt`, `missCount`, `missAt`): every time a top-level rule is
+    evaluated it counts one hit or miss, disabled rules are skipped and not
+    counted. Statistics are kept in memory and reset when sing-box restarts or
+    reloads the configuration.
+
+    `PATCH /rules/disable` takes `{"<index>": true|false}` to disable or enable
+    rules by `index`; `PUT /rules/{uuid}` still toggles a rule by `uuid`.
+
+!!! info "TCP concurrent dialing"
+
+    Like mihomo, `GET /configs` reports `tcp-concurrent`, and `tcp-concurrent` in `PATCH /configs` switches
+    [`dns.tcp_concurrent`](/configuration/dns/#tcp_concurrent) at runtime. The switch is not persisted, and
+    dialers with their own `tcp_concurrent` ignore it.
+
+    `GET /dns/tcp-concurrent` returns `enabled`, `adaptive` (no `attempt_delay`), `attemptDelay` (milliseconds),
+    `maxConcurrent`, the `statistics` (`races`, `raceFailures`, `historyHits`, `attempts`, `failures`,
+    `canceled`, `lateClosed`, `wins` counted by the position of the winning attempt, and `averageConnectTime` in
+    milliseconds), the remembered `destinations` (`host`, `port`, `address`, smoothed `connectTime` in
+    milliseconds, `expiresAt`) and the failed addresses `failures` (`address`, `expiresAt`).
+    `DELETE /dns/tcp-concurrent` clears the history and keeps the statistics.
+
 ### Fields
 
 #### external_controller
@@ -110,16 +154,7 @@ HTTP Client for downloading external UI.
 
 See [HTTP Client Fields](/configuration/shared/http-client/) for details.
 
-If empty, the default HTTP client is used: the client selected by
-[`route.default_http_client`](/configuration/route/#default_http_client), or the first top-level `http_clients` entry if no default tag is specified.
-
-When external UI downloading is enabled, the client configuration is validated at startup, even if UI files already exist.
-This field cannot be combined with `external_ui_download_detour`.
-
-!!! failure "Implicit default deprecated in sing-box 1.14.0"
-
-    If neither a client nor the legacy download detour is configured, downloads fall back to the implicit HTTP client using the default outbound.
-    This fallback is deprecated in sing-box 1.14.0 and will be removed in sing-box 1.16.0. Define `http_clients` or configure this field explicitly.
+Default transport will be used if empty.
 
 #### external_ui_download_detour
 

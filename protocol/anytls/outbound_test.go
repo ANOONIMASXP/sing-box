@@ -7,7 +7,6 @@ import (
 	anytls "github.com/sagernet/sing-anytls"
 	"github.com/sagernet/sing-box/adapter"
 	C "github.com/sagernet/sing-box/constant"
-	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/json"
@@ -45,8 +44,7 @@ func TestOutboundOptions(t *testing.T) {
 		require.Equal(t, !disableReuse, outbound.MultiplexEnabled())
 		require.NotNil(t, outbound.clientOptions.ClientMetadata)
 		require.Empty(t, *outbound.clientOptions.ClientMetadata)
-		scope := adapter.NewScope(t.Context(), log.NewNOPFactory().Logger())
-		t.Cleanup(func() { _ = scope.Close() })
+		scope := adapter.NewScope(context.Background(), logger.NOP())
 		require.NoError(t, outbound.Start(adapter.StartStateInitialize, scope))
 		require.NoError(t, scope.Close())
 	}

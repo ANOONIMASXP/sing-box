@@ -73,9 +73,17 @@ func (d *stackDevice) WriteInboundBuffers(packetBuffers []*buf.Buffer) error {
 	return d.processInboundBuffers(packetBuffers, d.writeBuffers)
 }
 
+func (d *stackDevice) WaitWriteInboundBuffers(packetBuffers []*buf.Buffer) error {
+	return d.processInboundBuffers(packetBuffers, d.waitWriteBuffers)
+}
+
 func (d *stackDevice) writeBuffers(packetBuffers []*buf.Buffer) error {
 	_, err := d.memoryTun.WritePackets(common.Map(packetBuffers, (*buf.Buffer).Bytes))
 	return err
+}
+
+func (d *stackDevice) waitWriteBuffers(packetBuffers []*buf.Buffer) error {
+	return d.memoryTun.WaitWritePackets(common.Map(packetBuffers, (*buf.Buffer).Bytes))
 }
 
 func (d *stackDevice) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
@@ -118,14 +126,20 @@ func (d *stackDevice) ListenPacket(ctx context.Context, destination M.Socksaddr)
 func (d *stackDevice) bindAddress(destination M.Socksaddr) (netip.Addr, error) {
 	d.stateAccess.RLock()
 	defer d.stateAccess.RUnlock()
+	if !destination.IsIPv4() && d.options.Configuration.BlockIPv6 {
+		return netip.Addr{}, E.New("IPv6 is blocked")
+	}
+	if d.options.SourceAddress != nil && destination.IsIP() {
+		source := d.options.SourceAddress(destination.Addr)
+		if source.IsValid() && source.Is4() == destination.Addr.Is4() {
+			return source, nil
+		}
+	}
 	if destination.IsIPv4() {
 		if !d.inet4Address.IsValid() {
 			return netip.Addr{}, E.New("missing IPv4 local address")
 		}
 		return d.inet4Address, nil
-	}
-	if d.options.Configuration.BlockIPv6 {
-		return netip.Addr{}, E.New("IPv6 is blocked")
 	}
 	if !d.inet6Address.IsValid() {
 		return netip.Addr{}, E.New("missing IPv6 local address")

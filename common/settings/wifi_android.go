@@ -8,10 +8,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/mdlayher/genetlink"
-	"github.com/mdlayher/wifi"
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing/common/logger"
+
+	"github.com/mdlayher/genetlink"
+	"github.com/mdlayher/wifi"
 )
 
 const (

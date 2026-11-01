@@ -7,6 +7,8 @@ import (
 	"io/fs"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/sagernet/fswatch"
 	"github.com/sagernet/sing-box/adapter"
@@ -23,7 +25,8 @@ var _ adapter.RuleSet = (*LocalRuleSet)(nil)
 
 type LocalRuleSet struct {
 	abstractRuleSet
-	watcher *fswatch.Watcher
+	watcher  *fswatch.Watcher
+	reloadMu sync.Mutex
 }
 
 func NewLocalRuleSet(ctx context.Context, logger logger.ContextLogger, tag string, options option.RuleSet) (*LocalRuleSet, error) {
@@ -44,6 +47,8 @@ func NewLocalRuleSet(ctx context.Context, logger logger.ContextLogger, tag strin
 		if err != nil {
 			return nil, err
 		}
+		// 对齐 mihomo inline provider：updatedAt 取创建时间
+		ruleSet.lastUpdated = time.Now()
 	} else {
 		path, err := ruleSet.getPath(ctx, strings.ReplaceAll(options.Path, C.RuleSetTagPlaceholder, tag))
 		if err != nil {
@@ -54,12 +59,20 @@ func NewLocalRuleSet(ctx context.Context, logger logger.ContextLogger, tag strin
 		if err != nil {
 			return nil, err
 		}
+
+		dir := filepath.Dir(path)
+		targetFile := filepath.Base(path)
+
 		watcher, err := fswatch.NewWatcher(fswatch.Options{
-			Path: []string{path},
-			Callback: func(path string) {
-				uErr := ruleSet.reloadFile(path)
-				if uErr != nil {
-					logger.ErrorContext(log.ContextWithNewID(context.Background()), E.Cause(uErr, "reload rule-set ", tag))
+			Path: []string{path, dir},
+			Callback: func(eventPath string) {
+				if filepath.Base(eventPath) == targetFile || eventPath == path {
+					uErr := ruleSet.reloadFile(path)
+					if uErr != nil {
+						logger.ErrorContext(log.ContextWithNewID(context.Background()), E.Cause(uErr, "reload rule-set ", tag))
+					} else {
+						logger.InfoContext(log.ContextWithNewID(context.Background()), "reloaded local rule-set ", tag)
+					}
 				}
 			},
 		})
@@ -82,6 +95,9 @@ func (s *LocalRuleSet) StartContext(ctx context.Context, startContext *adapter.H
 }
 
 func (s *LocalRuleSet) reloadFile(path string) error {
+	s.reloadMu.Lock()
+	defer s.reloadMu.Unlock()
+
 	file, err := filemanager.Open(s.ctx, path)
 	if err != nil {
 		return err
@@ -126,10 +142,17 @@ func (s *LocalRuleSet) getPath(ctx context.Context, path string) (string, error)
 }
 
 func (s *LocalRuleSet) Update(ctx context.Context) error {
+	if s.path == "" {
+		return nil
+	}
+	return s.reloadFile(s.path)
+}
+
+func (s *LocalRuleSet) PostStart() error {
 	return nil
 }
 
 func (s *LocalRuleSet) Close() error {
-	s.rules = nil
+	s.clearRules()
 	return common.Close(common.PtrOrNil(s.watcher))
 }

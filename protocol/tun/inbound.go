@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/netip"
 	"os"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -54,6 +53,7 @@ type Inbound struct {
 	tunIf                   tun.Tun
 	tunStack                tun.Stack
 	platformInterface       adapter.PlatformInterface
+	usePlatformInterface    bool
 	platformOptions         option.TunPlatformOptions
 	enableAutoRedirect      bool
 	usePlatformAutoRedirect bool
@@ -169,7 +169,7 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 	}
 
 	tableIndex := options.IPRoute2TableIndex
-	if tableIndex == 0 {
+	if tableIndex == 0 && options.AutoRoute {
 		tableIndex = tun.DefaultIPRoute2TableIndex
 	}
 	ruleIndex := options.IPRoute2RuleIndex
@@ -247,13 +247,14 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 			Logger:                                logger,
 			EXP_MultiPendingPackets:               C.IsDarwin,
 		},
-		udpTimeout:        udpTimeout,
-		udpMapping:        tun.NATMapping(options.UDPMapping),
-		udpFiltering:      tun.NATFiltering(options.UDPFiltering),
-		udpNATMax:         options.UDPNATMax,
-		stack:             options.Stack,
-		platformInterface: platformInterface,
-		platformOptions:   common.PtrValueOrDefault(options.Platform),
+		udpTimeout:           udpTimeout,
+		udpMapping:           tun.NATMapping(options.UDPMapping),
+		udpFiltering:         tun.NATFiltering(options.UDPFiltering),
+		udpNATMax:            options.UDPNATMax,
+		stack:                options.Stack,
+		platformInterface:    platformInterface,
+		usePlatformInterface: usePlatformInterface,
+		platformOptions:      common.PtrValueOrDefault(options.Platform),
 	}
 	for _, routeAddressSet := range options.RouteAddressSet {
 		ruleSet, loaded := router.RuleSet(routeAddressSet)
@@ -276,18 +277,20 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		if !C.IsLinux {
 			return nil, E.New("`auto_redirect` is only supported on Linux")
 		}
+		disableMarkMode := !C.IsAndroid && options.AutoRedirectDisableMarkMode
+		if disableMarkMode && (len(inbound.routeRuleSet) > 0 || len(inbound.routeExcludeRuleSet) > 0) {
+			return nil, E.New("`auto_redirect` mark mode cannot be disabled with `route_address_set` or `route_exclude_address_set`")
+		}
 		disableNFTables, parseErr := strconv.ParseBool(os.Getenv("DISABLE_NFTABLES"))
 		inbound.enableAutoRedirect = true
 		inbound.usePlatformAutoRedirect = platformInterface != nil && platformInterface.UsePlatformAutoRedirect()
 		inbound.disableNFTables = parseErr == nil && disableNFTables
-		disableMarkMode := C.IsLinux && !C.IsAndroid && options.AutoRedirectDisableMarkMode
-		if disableMarkMode && (len(inbound.routeRuleSet) > 0 || len(inbound.routeExcludeRuleSet) > 0) {
-			return nil, E.New("`auto_redirect` mark mode cannot be disabled with `route_address_set` or `route_exclude_address_set`")
-		}
 		inbound.tunOptions.AutoRedirectMarkMode = !disableMarkMode
+		inbound.platformOptions.AndroidVPNRouteBypass = C.IsAndroid && inbound.usePlatformAutoRedirect &&
+			(len(inbound.routeRuleSet) > 0 || len(inbound.routeExcludeRuleSet) > 0)
 		inbound.dnsHijackByPort = inbound.tunOptions.DNSModeOrDefault() == tun.DNSModeHijack
 		if !inbound.usePlatformAutoRedirect && !disableMarkMode && options.NetNs == "" {
-			err = networkManager.RegisterAutoRedirectOutputMark(inbound.tunOptions.AutoRedirectOutputMarkOrDefault())
+			err = networkManager.RegisterAutoRedirectOutputMark(autoRedirectOutputMark(&inbound.tunOptions))
 			if err != nil {
 				return nil, err
 			}
@@ -345,7 +348,7 @@ func (t *Inbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 			t.dnsHijackAddress = append(inet4DNSAddress, inet6DNSAddress...)
 		}
 	case adapter.StartStateStart:
-		if t.platformInterface == nil &&
+		if !t.usePlatformInterface &&
 			((C.IsLinux && !t.tunOptions.GSO) || (C.IsDarwin && !t.tunOptions.EXP_MultiPendingPackets)) {
 			outboundManager := service.FromContext[adapter.OutboundManager](t.ctx)
 			endpointManager := service.FromContext[adapter.EndpointManager](t.ctx)
@@ -407,13 +410,17 @@ func (t *Inbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 			routeAddressSet        []*netipx.IPSet
 			routeExcludeAddressSet []*netipx.IPSet
 		)
-		if t.autoRedirect != nil || t.platformInterface == nil || !t.platformInterface.UsePlatformInterface() {
+		if t.autoRedirect != nil || !t.usePlatformInterface {
 			for _, routeRuleSet := range t.routeRuleSet {
 				ipSets := routeRuleSet.ExtractIPSet()
 				if len(ipSets) == 0 {
 					t.logger.Warn("route_address_set: no destination IP CIDR rules found in rule-set: ", routeRuleSet.Name())
 				}
 				routeRuleSet.IncRef()
+				scope.Add(func() error {
+					routeRuleSet.DecRef()
+					return nil
+				})
 				routeAddressSet = append(routeAddressSet, ipSets...)
 			}
 			for _, routeExcludeRuleSet := range t.routeExcludeRuleSet {
@@ -422,6 +429,10 @@ func (t *Inbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 					t.logger.Warn("route_exclude_address_set: no destination IP CIDR rules found in rule-set: ", routeExcludeRuleSet.Name())
 				}
 				routeExcludeRuleSet.IncRef()
+				scope.Add(func() error {
+					routeExcludeRuleSet.DecRef()
+					return nil
+				})
 				routeExcludeAddressSet = append(routeExcludeAddressSet, ipSets...)
 			}
 			if t.autoRedirect != nil {
@@ -448,7 +459,7 @@ func (t *Inbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 		var tunInterface tun.Tun
 		monitor := taskmonitor.New(t.logger, C.StartTimeout)
 		tunOptions := t.tunOptions
-		if t.autoRedirect == nil && !(runtime.GOOS == "android" && t.platformInterface != nil) {
+		if t.autoRedirect == nil {
 			for _, ipSet := range routeAddressSet {
 				for _, prefix := range ipSet.Prefixes() {
 					if prefix.Addr().Is4() {
@@ -469,10 +480,8 @@ func (t *Inbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 			}
 		}
 		monitor.Start("open interface")
-		if t.platformInterface != nil && t.platformInterface.UsePlatformInterface() {
-			// Routing bypass actions also need VPN route compatibility without address sets.
-			androidVPNRouteBypass := C.IsAndroid && t.usePlatformAutoRedirect
-			tunInterface, err = t.platformInterface.OpenInterface(&tunOptions, t.platformOptions, androidVPNRouteBypass)
+		if t.usePlatformInterface {
+			tunInterface, err = t.platformInterface.OpenInterface(&tunOptions, t.platformOptions, t.platformOptions.AndroidVPNRouteBypass)
 		} else {
 			tunInterface, err = tun.New(tunOptions)
 		}
@@ -527,7 +536,15 @@ func (t *Inbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 		err := t.tunStack.Start()
 		monitor.Finish()
 		if err != nil {
-			return E.Cause(err, "starting tun stack")
+			// IPv6 bind 失败（`bind: cannot assign requested address` 或
+			// `address family not supported`）在纯 IPv4 主机 / 容器里很常见 —
+			// Box.Start 不应因此 fatal。记 warn 继续；已建立的 IPv4 stack
+			// 仍然能用，用户 IPv6 流量会走 direct/fallback 路由。
+			if isIPv6BindFailure(err) {
+				t.logger.Warn("tun stack IPv6 bind failed, continuing with IPv4-only: ", err)
+			} else {
+				return E.Cause(err, "starting tun stack")
+			}
 		}
 		monitor.Start("starting tun interface")
 		err = t.tunIf.Start()
@@ -578,6 +595,20 @@ func (t *Inbound) InterfaceUpdated(ctx context.Context) {
 	if tunStack != nil {
 		tunStack.ResetNetwork()
 	}
+}
+
+func (t *Inbound) FlushSystemDNSCache() {
+	linuxTUN, isLinuxTUN := t.tunIf.(tun.LinuxTUN)
+	if !isLinuxTUN {
+		return
+	}
+	serviceManager := service.FromContext[adapter.ServiceManager](t.ctx)
+	if slices.ContainsFunc(serviceManager.Services(), func(it adapter.Service) bool {
+		return it.Type() == C.TypeResolved
+	}) {
+		return
+	}
+	linuxTUN.FlushDNSCache()
 }
 
 func (t *Inbound) JudgeFlow(network uint8, source netip.AddrPort, destination netip.AddrPort, firstPacket []byte) tun.FlowVerdict {
@@ -693,3 +724,33 @@ func (t *autoRedirectHandler) NewConnectionEx(ctx context.Context, conn net.Conn
 }
 
 var _ tun.AutoRedirectHandler = (*autoRedirectHandler)(nil)
+
+// isIPv6BindFailure 返回 err 是否是"本机没有 IPv6 地址族可用"导致的
+// bind 失败。典型触发:
+//   - 容器/VPS 禁用 IPv6 (sysctl net.ipv6.conf.*.disable_ipv6=1)
+//   - 云服务没给 instance 分配 IPv6 但路由表仍有 ::1
+//   - Android 某些 ROM VPN Service 不提供 IPv6 路由
+//
+// 这些场景下 IPv4 tun stack 本身能正常起。把 IPv6 bind 错误降级为 warn
+// 而不是 fatal 是合理的默认 —— 用户配置了 inet6_address 只是在"可用时"
+// 想要 IPv6；否则整个 sing-box 都起不来会让配置在有/无 IPv6 的机器间不
+// 可移植。
+//
+// 保守匹配：只认 "cannot assign requested address" 和
+// "address family not supported" 这两个典型错误串，其他 bind 错误（端口
+// 被占、权限不足）仍然上报 fatal，避免把严重问题吞掉。
+func isIPv6BindFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	// Linux EADDRNOTAVAIL + macOS/Windows 等价描述
+	if strings.Contains(s, "cannot assign requested address") {
+		return true
+	}
+	// Linux EAFNOSUPPORT — 内核编译时禁了 IPv6
+	if strings.Contains(s, "address family not supported") {
+		return true
+	}
+	return false
+}

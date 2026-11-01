@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"math/rand"
 	"net"
+	"slices"
 	"strings"
 	"time"
 
@@ -98,6 +99,52 @@ func (c *UTLSClientConfig) SetHandshakeTimeout(timeout time.Duration) {
 
 func (c *UTLSClientConfig) STDConfig() (*STDConfig, error) {
 	return nil, E.New("unsupported usage for uTLS")
+}
+
+// stdClientConfig 返回去掉 uTLS 指纹、其余设置等价的标准库客户端配置，供 QUIC 使用。
+// 分片与 spoof 只作用于 TCP 上的 ClientHello，不带过去。
+func (c *UTLSClientConfig) stdClientConfig() *STDClientConfig {
+	tlsConfig := &tls.Config{
+		Time:                           c.config.Time,
+		RootCAs:                        c.config.RootCAs,
+		NextProtos:                     slices.Clone(c.config.NextProtos),
+		InsecureSkipVerify:             c.config.InsecureSkipVerify || c.verifyServerName,
+		VerifyPeerCertificate:          c.config.VerifyPeerCertificate,
+		CipherSuites:                   slices.Clone(c.config.CipherSuites),
+		MinVersion:                     c.config.MinVersion,
+		MaxVersion:                     c.config.MaxVersion,
+		EncryptedClientHelloConfigList: slices.Clone(c.config.EncryptedClientHelloConfigList),
+	}
+	for _, curve := range c.config.CurvePreferences {
+		tlsConfig.CurvePreferences = append(tlsConfig.CurvePreferences, tls.CurveID(curve))
+	}
+	if len(c.config.Certificates) > 0 {
+		clientCertificates := make([]tls.Certificate, 0, len(c.config.Certificates))
+		for _, certificate := range c.config.Certificates {
+			clientCertificates = append(clientCertificates, tls.Certificate{
+				Certificate: certificate.Certificate,
+				PrivateKey:  certificate.PrivateKey,
+				Leaf:        certificate.Leaf,
+			})
+		}
+		// 与 newSTDClient 相同，用 GetClientCertificate 而不是 Certificates：
+		// QUIC 的 Chrome 指纹握手会把 Certificates 当作服务端字段拒绝。
+		tlsConfig.GetClientCertificate = selectClientCertificate(clientCertificates)
+	}
+	// uTLS 用 InsecureServerNameToVerify 校验另一个名字，标准库没有对应字段：
+	// 与 newSTDClient 相同，跳过内置校验，由 SetServerName 装上的 VerifyPeerCertificate 校验。
+	config := &STDClientConfig{
+		ctx:                   c.ctx,
+		config:                tlsConfig,
+		serverName:            c.serverName,
+		certificateServerName: c.certificateServerName,
+		disableSNI:            c.disableSNI,
+		verifyServerName:      c.verifyServerName,
+		certificatePinSHA256:  append([]byte(nil), c.certificatePinSHA256...),
+		handshakeTimeout:      c.handshakeTimeout,
+	}
+	config.SetServerName(c.serverName)
+	return config
 }
 
 func (c *UTLSClientConfig) Client(conn net.Conn) (Conn, error) {

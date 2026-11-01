@@ -126,8 +126,23 @@ cgroup v2 子树。
 `cgroup` 数据面使用的绝对 cgroup v2 子树。省略时接管当前可见的 cgroup v2 根层级
 及其子层级。
 
-Android 厂商的 netd hook 可能造成挂载冲突。sing-box 优先尝试多程序挂载，只在兼容
-错误下回退旧式独占挂载；设备无法安全共享根 cgroup hook 时应使用 local `socket_assign`。
+绑定了网络接口的 socket（例如 systemd-resolved 用于其 DNS 服务器的 socket）同样会被
+接管。这类 socket 的路由查找限定在所绑定的接口上，因此 sing-box 会在每个已启用且带有
+对应地址族地址的接口上，把重定向前缀安装为本地路由（`local` 表中 protocol 为 83），
+并随接口与地址的变化更新。
+
+sing-box 优先尝试多程序挂载，只在兼容错误下回退旧式独占挂载。
+
+Android 15 及以上的 netd 会以单程序模式在 cgroup v2 根层级的 connect、sendmsg 和
+recvmsg hook 上挂载一个直接放行的占位程序，导致所有 cgroup 的这些 hook 都无法进行
+多程序挂载。sing-box 会在入站运行期间替换该占位程序，并在入站停止时将其还原；API
+将此报告为挂载方式 `legacy_netd_replace`。入站占用这些 hook 期间，eBPF 进程追踪和
+另一个使用 cgroup 数据面的入站都无法挂载到这些 hook 上，因此进程查找会回退到用户态
+搜索。netd 的 socket-release 程序永远不会被替换，因此这类设备上的 UDP 清理使用有界
+LRU 回退。
+
+其他以独占方式持有 hook 的程序都会被保留，启动将失败，并在错误中指明该程序。这种
+情况下应使用 local `socket_assign`。
 
 ### local.dns_mode
 
@@ -278,8 +293,8 @@ raw-IP、PPP/PPPoE 和受支持的隧道链路应使用 `socket_assign`。local 
 ### shared.bypass_exclude
 
 与 `local.bypass_exclude` 相同，但作用于 shared 数据面：这些 CIDR 前缀会在
-所有 shared bypass 决策之前被强制接管。每个地址族最多接受一个前缀，与 DNS
-fake-ip 范围重叠的前缀会在启动时报错。
+所有 shared bypass 决策之前被强制接管。支持多个 IPv4 和 IPv6 前缀，与
+`local.bypass_exclude` 相互独立。
 
 ### shared.bypass_rule_set
 
@@ -330,7 +345,7 @@ fake-ip 范围重叠的前缀会在启动时报错。
 - `sing-box tools ebpf status` 对所选数据面执行不挂载的内核能力和对象加载预检。
 - `sing-box api ebpf` 从运行实例读取 attachment、恢复状态、活动程序、map 占用、资源、
   UDP/会话统计、分片/放行计数和失败信息。local cgroup 还会报告回退后实际使用的挂载、
-  UDP 清理、socket storage 和时间源模式；需要启用
+  UDP 清理、socket storage 和时间源模式，以及 UDP socket-release 路径；需要启用
   [sing-box API 服务](/zh/configuration/service/api/)。
 
 local socket assignment 和 shared `socket_assign` 还会报告实际的 TCX/clsact 挂载机制、SOCKMAP/direct

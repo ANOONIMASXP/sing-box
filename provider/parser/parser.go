@@ -17,13 +17,13 @@ var subscriptionParsers = []func(ctx context.Context, content string) ([]option.
 	ParseRawSubscription,
 }
 
-func ParseSubscription(ctx context.Context, content string, overrideDialerOptions *option.OverrideDialerOptions, overrideTLSOptions *option.OverrideTLSOptions, overrideAnyTLSOptions *option.OverrideAnyTLSOptions, providerTag string) ([]option.Outbound, []option.Endpoint, error) {
+func ParseSubscription(ctx context.Context, content string, overrideDialerOptions *option.OverrideDialerOptions, overrideTLSOptions *option.OverrideTLSOptions, overrideAnyTLSOptions *option.OverrideAnyTLSOptions, overrideTransportOptions *option.OverrideTransportOptions, providerTag string) ([]option.Outbound, []option.Endpoint, error) {
 	var pErr error
 	for _, parser := range subscriptionParsers {
 		outbounds, endpoints, err := parser(ctx, content)
 		if len(outbounds) > 0 || len(endpoints) > 0 {
 			tags := providerTags(outbounds, endpoints)
-			return overrideOutbounds(outbounds, overrideDialerOptions, overrideTLSOptions, overrideAnyTLSOptions, tags, providerTag),
+			return overrideOutbounds(outbounds, overrideDialerOptions, overrideTLSOptions, overrideAnyTLSOptions, overrideTransportOptions, tags, providerTag),
 				overrideEndpoints(endpoints, overrideDialerOptions, tags, providerTag),
 				nil
 		}
@@ -43,7 +43,7 @@ func providerTags(outbounds []option.Outbound, endpoints []option.Endpoint) []st
 	return tags
 }
 
-func overrideOutbounds(outbounds []option.Outbound, overrideDialerOptions *option.OverrideDialerOptions, overrideTLSOptions *option.OverrideTLSOptions, overrideAnyTLSOptions *option.OverrideAnyTLSOptions, tags []string, providerTag string) []option.Outbound {
+func overrideOutbounds(outbounds []option.Outbound, overrideDialerOptions *option.OverrideDialerOptions, overrideTLSOptions *option.OverrideTLSOptions, overrideAnyTLSOptions *option.OverrideAnyTLSOptions, overrideTransportOptions *option.OverrideTransportOptions, tags []string, providerTag string) []option.Outbound {
 	var parsedOutbounds []option.Outbound
 	for _, outbound := range outbounds {
 		switch outbound.Type {
@@ -65,16 +65,19 @@ func overrideOutbounds(outbounds []option.Outbound, overrideDialerOptions *optio
 			options := outbound.Options.(*option.VMessOutboundOptions)
 			options.DialerOptions = overrideDialerOption(options.DialerOptions, overrideDialerOptions, tags, providerTag)
 			options.OutboundTLSOptionsContainer.TLS = overrideTLSOption(options.OutboundTLSOptionsContainer.TLS, overrideTLSOptions)
+			options.Transport = overrideTransportOption(options.Transport, overrideTLSOptions, overrideTransportOptions)
 			outbound.Options = options
 		case C.TypeVLESS:
 			options := outbound.Options.(*option.VLESSOutboundOptions)
 			options.DialerOptions = overrideDialerOption(options.DialerOptions, overrideDialerOptions, tags, providerTag)
 			options.OutboundTLSOptionsContainer.TLS = overrideTLSOption(options.OutboundTLSOptionsContainer.TLS, overrideTLSOptions)
+			options.Transport = overrideTransportOption(options.Transport, overrideTLSOptions, overrideTransportOptions)
 			outbound.Options = options
 		case C.TypeTrojan:
 			options := outbound.Options.(*option.TrojanOutboundOptions)
 			options.DialerOptions = overrideDialerOption(options.DialerOptions, overrideDialerOptions, tags, providerTag)
 			options.OutboundTLSOptionsContainer.TLS = overrideTLSOption(options.OutboundTLSOptionsContainer.TLS, overrideTLSOptions)
+			options.Transport = overrideTransportOption(options.Transport, overrideTLSOptions, overrideTransportOptions)
 			outbound.Options = options
 		case C.TypeHysteria:
 			options := outbound.Options.(*option.HysteriaOutboundOptions)
@@ -91,17 +94,61 @@ func overrideOutbounds(outbounds []option.Outbound, overrideDialerOptions *optio
 			options.DialerOptions = overrideDialerOption(options.DialerOptions, overrideDialerOptions, tags, providerTag)
 			options.OutboundTLSOptionsContainer.TLS = overrideTLSOption(options.OutboundTLSOptionsContainer.TLS, overrideTLSOptions)
 			outbound.Options = options
+		case C.TypeQUICX:
+			options := outbound.Options.(*option.QUICXOutboundOptions)
+			options.DialerOptions = overrideDialerOption(options.DialerOptions, overrideDialerOptions, tags, providerTag)
+			options.OutboundTLSOptionsContainer.TLS = overrideTLSOption(options.OutboundTLSOptionsContainer.TLS, overrideTLSOptions)
+			outbound.Options = options
+		case C.TypeNowhere:
+			options := outbound.Options.(*option.NowhereOutboundOptions)
+			options.DialerOptions = overrideDialerOption(options.DialerOptions, overrideDialerOptions, tags, providerTag)
+			options.OutboundTLSOptionsContainer.TLS = overrideTLSOption(options.OutboundTLSOptionsContainer.TLS, overrideTLSOptions)
+			outbound.Options = options
 		case C.TypeAnyTLS:
-			options := outbound.Options.(*option.AnyTLSOutboundOptions)
+			anytlsOptions := outbound.Options.(*option.AnyTLSOutboundOptions)
+			dialerOptions := overrideDialerOption(anytlsOptions.DialerOptions, overrideDialerOptions, tags, providerTag)
+			tlsOptions := overrideTLSOption(anytlsOptions.OutboundTLSOptionsContainer.TLS, overrideTLSOptions)
+			if overrideAnyTLSOptions != nil && overrideAnyTLSOptions.UseAnyX != nil && *overrideAnyTLSOptions.UseAnyX {
+				anyxOptions := &option.AnyXOutboundOptions{
+					DialerOptions:               dialerOptions,
+					ServerOptions:               anytlsOptions.ServerOptions,
+					OutboundTLSOptionsContainer: option.OutboundTLSOptionsContainer{TLS: tlsOptions},
+					Password:                    anytlsOptions.Password,
+					IdleSessionCheckInterval:    anytlsOptions.IdleSessionCheckInterval,
+					IdleSessionTimeout:          anytlsOptions.IdleSessionTimeout,
+					MinIdleSession:              anytlsOptions.MinIdleSession,
+					ClientMetadata:              anytlsOptions.ClientMetadata,
+					DisableReuse:                anytlsOptions.DisableReuse,
+					Network:                     anytlsOptions.Network,
+				}
+				overrideAnyXOptions(anyxOptions, overrideAnyTLSOptions)
+				outbound.Type = C.TypeAnyX
+				outbound.Options = anyxOptions
+			} else {
+				anytlsOptions.DialerOptions = dialerOptions
+				anytlsOptions.OutboundTLSOptionsContainer.TLS = tlsOptions
+				if overrideAnyTLSOptions != nil {
+					if overrideAnyTLSOptions.ClientMetadata != nil {
+						anytlsOptions.ClientMetadata = overrideAnyTLSOptions.ClientMetadata
+					}
+					if overrideAnyTLSOptions.DisableReuse != nil {
+						anytlsOptions.DisableReuse = *overrideAnyTLSOptions.DisableReuse
+					}
+					if overrideAnyTLSOptions.MinIdleSession != nil {
+						anytlsOptions.MinIdleSession = *overrideAnyTLSOptions.MinIdleSession
+					}
+					if overrideAnyTLSOptions.IdleSessionTimeout != nil {
+						anytlsOptions.IdleSessionTimeout = *overrideAnyTLSOptions.IdleSessionTimeout
+					}
+				}
+				outbound.Options = anytlsOptions
+			}
+		case C.TypeAnyX:
+			options := outbound.Options.(*option.AnyXOutboundOptions)
 			options.DialerOptions = overrideDialerOption(options.DialerOptions, overrideDialerOptions, tags, providerTag)
 			options.OutboundTLSOptionsContainer.TLS = overrideTLSOption(options.OutboundTLSOptionsContainer.TLS, overrideTLSOptions)
 			if overrideAnyTLSOptions != nil {
-				if overrideAnyTLSOptions.ClientMetadata != nil {
-					options.ClientMetadata = overrideAnyTLSOptions.ClientMetadata
-				}
-				if overrideAnyTLSOptions.DisableReuse != nil {
-					options.DisableReuse = *overrideAnyTLSOptions.DisableReuse
-				}
+				overrideAnyXOptions(options, overrideAnyTLSOptions)
 			}
 			outbound.Options = options
 		case C.TypeShadowsocks:
@@ -197,7 +244,9 @@ func overrideDialerOption(options option.DialerOptions, overrideDialerOptions *o
 	if overrideDialerOptions.UDPFragment != nil {
 		options.UDPFragment = overrideDialerOptions.UDPFragment
 	}
-	options.DomainResolver = overrideDialerOptions.DomainResolver
+	if overrideDialerOptions.DomainResolver != nil {
+		options.DomainResolver = overrideDialerOptions.DomainResolver
+	}
 	if overrideDialerOptions.NetworkStrategy != nil {
 		options.NetworkStrategy = overrideDialerOptions.NetworkStrategy
 	}
@@ -222,6 +271,18 @@ func overrideDialerOption(options option.DialerOptions, overrideDialerOptions *o
 		options.DomainStrategy = *overrideDialerOptions.DomainStrategy
 	}
 	return options
+}
+
+func overrideRealityOption(reality *option.OutboundRealityOptions, overrideReality *option.OverrideRealityOptions) {
+	if reality == nil || overrideReality == nil {
+		return
+	}
+	if overrideReality.KeyShare != nil {
+		reality.KeyShare = *overrideReality.KeyShare
+	}
+	if overrideReality.Version != nil {
+		reality.Version = *overrideReality.Version
+	}
 }
 
 func overrideTLSOption(options *option.OutboundTLSOptions, overrideTLSOptions *option.OverrideTLSOptions) *option.OutboundTLSOptions {
@@ -256,5 +317,100 @@ func overrideTLSOption(options *option.OutboundTLSOptions, overrideTLSOptions *o
 	if overrideTLSOptions.KernelRx != nil {
 		options.KernelRx = *overrideTLSOptions.KernelRx
 	}
+	if overrideTLSOptions.ECH != nil {
+		options.ECH = overrideECHOption(options.ECH, overrideTLSOptions.ECH)
+	}
+	if overrideTLSOptions.Reality != nil && options.Reality != nil {
+		overrideRealityOption(options.Reality, overrideTLSOptions.Reality)
+	}
 	return options
+}
+
+func overrideTransportOption(options *option.V2RayTransportOptions, overrideTLSOptions *option.OverrideTLSOptions, overrideTransportOptions *option.OverrideTransportOptions) *option.V2RayTransportOptions {
+	if options == nil || options.Type != C.V2RayTransportTypeXHTTP {
+		return options
+	}
+	xhttpOptions, ok := options.Extra.(*option.V2RayXHTTPOptions)
+	if !ok || xhttpOptions == nil {
+		return options
+	}
+	if overrideTLSOptions != nil && overrideTLSOptions.Reality != nil && xhttpOptions.DownloadSettings != nil && xhttpOptions.DownloadSettings.TLS != nil && xhttpOptions.DownloadSettings.TLS.Reality != nil {
+		overrideRealityOption(xhttpOptions.DownloadSettings.TLS.Reality, overrideTLSOptions.Reality)
+	}
+	if overrideTransportOptions == nil {
+		return options
+	}
+	if overrideTransportOptions.XHTTPDownloadEnabled != nil {
+		if xhttpOptions.DownloadSettings != nil {
+			xhttpOptions.DownloadSettings.Enabled = overrideTransportOptions.XHTTPDownloadEnabled
+		}
+	}
+	if overrideTransportOptions.XHTTPDownloadDetour != nil {
+		if xhttpOptions.DownloadSettings != nil {
+			xhttpOptions.DownloadSettings.Detour = *overrideTransportOptions.XHTTPDownloadDetour
+		}
+	}
+	return options
+}
+
+func overrideECHOption(options *option.OutboundECHOptions, overrideECHOptions *option.OverrideECHOptions) *option.OutboundECHOptions {
+	var newOptions option.OutboundECHOptions
+	if options != nil {
+		newOptions = *options
+	}
+	if overrideECHOptions.Enabled != nil {
+		newOptions.Enabled = *overrideECHOptions.Enabled
+	}
+	if overrideECHOptions.Config != nil {
+		newOptions.Config = *overrideECHOptions.Config
+	}
+	if overrideECHOptions.ConfigPath != nil {
+		newOptions.ConfigPath = *overrideECHOptions.ConfigPath
+		// inline config takes precedence over config_path, drop the node's own one
+		if overrideECHOptions.Config == nil {
+			newOptions.Config = nil
+		}
+	}
+	if overrideECHOptions.QueryServerName != nil {
+		newOptions.QueryServerName = *overrideECHOptions.QueryServerName
+	}
+	return &newOptions
+}
+
+type warnHandlerKey struct{}
+
+// ContextWithWarnHandler lets parsers report subscription nodes they have to
+// skip, such as a Clash proxy whose protocol this build does not implement.
+func ContextWithWarnHandler(ctx context.Context, handler func(args ...any)) context.Context {
+	return context.WithValue(ctx, warnHandlerKey{}, handler)
+}
+
+func warn(ctx context.Context, args ...any) {
+	if handler, loaded := ctx.Value(warnHandlerKey{}).(func(args ...any)); loaded {
+		handler(args...)
+	}
+}
+
+func overrideAnyXOptions(options *option.AnyXOutboundOptions, overrideOptions *option.OverrideAnyTLSOptions) {
+	if overrideOptions.ClientMetadata != nil {
+		options.ClientMetadata = overrideOptions.ClientMetadata
+	}
+	if overrideOptions.DisableReuse != nil {
+		options.DisableReuse = *overrideOptions.DisableReuse
+	}
+	if overrideOptions.PaddingScheme != nil {
+		options.PaddingScheme = *overrideOptions.PaddingScheme
+	}
+	if overrideOptions.PaddingSchemeInterval != nil {
+		options.PaddingSchemeInterval = *overrideOptions.PaddingSchemeInterval
+	}
+	if overrideOptions.MinIdleSession != nil {
+		options.MinIdleSession = *overrideOptions.MinIdleSession
+	}
+	if overrideOptions.IdleSessionTimeout != nil {
+		options.IdleSessionTimeout = *overrideOptions.IdleSessionTimeout
+	}
+	if overrideOptions.IdleSessionMinTimeout != nil {
+		options.IdleSessionMinTimeout = *overrideOptions.IdleSessionMinTimeout
+	}
 }

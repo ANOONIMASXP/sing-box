@@ -14,7 +14,6 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common/control"
 	E "github.com/sagernet/sing/common/exceptions"
-	N "github.com/sagernet/sing/common/network"
 
 	"golang.org/x/sys/unix"
 )
@@ -94,8 +93,6 @@ func (c *selfBypassConn) Close() error {
 	return c.closeErr
 }
 
-func (c *selfBypassConn) DisableGSO() bool { return N.IsGSODisabled(c.Conn) }
-
 func (c *selfBypassConn) SyscallConn() (syscall.RawConn, error) { return c.rawConn, nil }
 
 // Only I/O may unwrap this adapter. The original owner must still close the
@@ -121,8 +118,6 @@ func (c *selfBypassPacketConn) Close() error {
 	})
 	return c.closeErr
 }
-
-func (c *selfBypassPacketConn) DisableGSO() bool { return N.IsGSODisabled(c.PacketConn) }
 
 func (c *selfBypassPacketConn) SyscallConn() (syscall.RawConn, error) { return c.rawConn, nil }
 
@@ -151,7 +146,7 @@ func EBPFSelfBypassCleanup(networkManager adapter.NetworkManager, rawConn syscal
 	}
 }
 
-func PrepareEBPFSelfBypass(networkManager adapter.NetworkManager, inbounds []option.Inbound, scope *adapter.Scope) error {
+func PrepareEBPFSelfBypass(networkManager adapter.NetworkManager, inbounds []option.Inbound) error {
 	localInstances := 0
 	localSocketAssign := false
 	for _, inbound := range inbounds {
@@ -174,9 +169,6 @@ func PrepareEBPFSelfBypass(networkManager adapter.NetworkManager, inbounds []opt
 	if localInstances == 0 {
 		return nil
 	}
-	if scope == nil {
-		return E.New("missing eBPF self-bypass lifecycle scope")
-	}
 	var tracker *commonEBPF.SelfBypass
 	var err error
 	if runtime.GOOS == "android" {
@@ -198,16 +190,6 @@ func PrepareEBPFSelfBypass(networkManager adapter.NetworkManager, inbounds []opt
 		_ = tracker.Close()
 		return err
 	}
-	// Preparation allocates a kernel map before any inbound is started.
-	// Retain a fallback owner for constructor failures and unstarted boxes.
-	scope.Add(func() error {
-		if clearer, loaded := networkManager.(interface {
-			ClearEBPFSelfBypass(*commonEBPF.SelfBypass)
-		}); loaded {
-			clearer.ClearEBPFSelfBypass(tracker)
-		}
-		return tracker.Close()
-	})
 	if localSocketAssign {
 		if setter, loaded := networkManager.(interface{ SetEBPFLocalSocketAssign(bool) }); loaded {
 			setter.SetEBPFLocalSocketAssign(true)
