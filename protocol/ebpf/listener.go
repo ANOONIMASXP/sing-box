@@ -9,7 +9,7 @@ import (
 	"sync"
 	"syscall"
 
-	commonEBPF "github.com/MiChongs/sing-ebpf"
+	commonEBPF "github.com/ANOONIMASXP/sing-ebpf"
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/listener"
 	"github.com/sagernet/sing-box/common/udpio"

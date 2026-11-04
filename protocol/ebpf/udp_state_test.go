@@ -8,7 +8,7 @@ import (
 	"net/netip"
 	"testing"
 
-	commonEBPF "github.com/MiChongs/sing-ebpf"
+	commonEBPF "github.com/ANOONIMASXP/sing-ebpf"
 )
 
 func TestUDPDirectBinding(t *testing.T) {

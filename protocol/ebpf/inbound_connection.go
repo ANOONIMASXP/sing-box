@@ -11,7 +11,7 @@ import (
 	"strings"
 	"syscall"
 
-	commonEBPF "github.com/MiChongs/sing-ebpf"
+	commonEBPF "github.com/ANOONIMASXP/sing-ebpf"
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/control"

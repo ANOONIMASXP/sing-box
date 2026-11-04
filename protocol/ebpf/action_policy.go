@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"sort"
 
-	commonEBPF "github.com/MiChongs/sing-ebpf"
+	commonEBPF "github.com/ANOONIMASXP/sing-ebpf"
 )
 
 // compileProcessUIDPolicy converts sing-box's include/exclude/package result

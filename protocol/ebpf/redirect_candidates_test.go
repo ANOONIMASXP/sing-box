@@ -5,7 +5,7 @@ package ebpf
 import (
 	"testing"
 
-	commonEBPF "github.com/MiChongs/sing-ebpf"
+	commonEBPF "github.com/ANOONIMASXP/sing-ebpf"
 )
 
 // Every redirect candidate must pass the data plane's own validation, or the

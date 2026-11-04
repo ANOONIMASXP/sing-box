@@ -11,7 +11,7 @@ import (
 	"slices"
 	"strings"
 
-	commonEBPF "github.com/MiChongs/sing-ebpf"
+	commonEBPF "github.com/ANOONIMASXP/sing-ebpf"
 	"github.com/sagernet/sing-box/adapter"
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -246,6 +246,9 @@ func (i *Inbound) startInbound() error {
 		"process_tracking": i.processTrackingMode(),
 		"tc_priority":      i.tcPriority,
 	}
+	if detail := i.processTrackingDetail(); detail != "" {
+		tcFields["process_tracking_detail"] = detail
+	}
 	if i.sharedEnabled {
 		tcFields["shared_default_interface"] = i.sharedOptions.DefaultInterface
 	}
@@ -359,7 +362,24 @@ func (i *Inbound) startProcessTracker() error {
 		return nil
 	}
 	i.processTracker = tracker
+	if detail := i.processTrackingDetail(); detail != "" {
+		i.logger.Debug("eBPF process tracker attached: ", detail)
+	}
 	return nil
+}
+
+// processTrackingDetail returns the optional sing-ebpf attachment summary.
+// The interface uses only strings so this package still compiles against an
+// upstream sing-ebpf that predates the report API.
+func (i *Inbound) processTrackingDetail() string {
+	if i.processTracker == nil {
+		return ""
+	}
+	reporter, loaded := any(i.processTracker).(interface{ AttachSummary() string })
+	if !loaded {
+		return ""
+	}
+	return reporter.AttachSummary()
 }
 
 func (i *Inbound) processTrackingMode() string {
@@ -370,10 +390,22 @@ func (i *Inbound) processTrackingMode() string {
 		return "off"
 	}
 	if i.processTracker != nil {
-		if i.processTracker.ReleaseCleanup() {
-			return "cgroup_socket_release"
+		mode := "cgroup_socket"
+		// CreateHook only exists in the locally replaced sing-ebpf build
+		// (./sing-ebpf, rebased onto v0.1.0-alpha.26 with the socket-create
+		// hook). Assert dynamically so this package still compiles against
+		// an upstream sing-ebpf checkout that predates the hook (CI resolves
+		// ./sing-ebpf from the upstream ref pinned in go.mod).
+		if createHook, ok := i.processTracker.(interface{ CreateHook() bool }); ok && createHook.CreateHook() {
+			// Owners are recorded at socket creation: the connect/sendmsg
+			// hooks can be held by netd placeholders while this one stays
+			// attachable.
+			mode = "cgroup_sock_create"
 		}
-		return "cgroup_socket_lru"
+		if i.processTracker.ReleaseCleanup() {
+			return mode + "_release"
+		}
+		return mode + "_lru"
 	}
 	return "userspace"
 }

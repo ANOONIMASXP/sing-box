@@ -42,7 +42,7 @@
 | Nowhere 2.1 入站与出站（含 Morph、Portal 链式转发） | [ohmycggk/sing-box](https://github.com/ohmycggk/sing-box) | 无需；QUIC carrier 需 `with_quic`（默认启用） |
 | EasyTier 端点与 Magic DNS | 本分支 | `with_easytier`（实验性，默认不启用） |
 | Clash API 扩展：规则命中统计、Smart 管理接口 | 本分支 | `with_clash_api`（默认启用） |
-| eBPF 入站 | reF1nd；本分支改用 [MiChongs/sing-ebpf](https://github.com/MiChongs/sing-ebpf) | `with_ebpf`（默认不启用） |
+| eBPF 入站 | reF1nd；本分支改用 [ANOONIMASXP/sing-ebpf](https://github.com/ANOONIMASXP/sing-ebpf) | `with_ebpf`（默认不启用） |
 | 订阅 Provider | reF1nd | 无需 |
 | URLTest 故障转移、`loadbalance` 出站组、`pass` 出站 | reF1nd | 无需 |
 | TLS `server_names` 与 `reject_unknown_sni`、TCP Keep-Alive 选项、DNS 缓存选项 | reF1nd | 无需 |
@@ -499,7 +499,7 @@ wazero 仅在 amd64 与 arm64 架构上以编译方式执行，其他架构使�
 
 ## eBPF 入站
 
-`ebpf` 入站无需创建 TUN 设备，即可将本机或下游设备的 TCP / UDP 流量透明导入 sing-box 路由。该入站源自 reF1nd，本分支改用 [MiChongs/sing-ebpf](https://github.com/MiChongs/sing-ebpf)（当前版本 v0.1.0-alpha.17）并同步维护集成代码。运行时为纯 Go 实现，使用 `with_ebpf` 构建时不需要 cgo 或 Android NDK。
+`ebpf` 入站无需创建 TUN 设备，即可将本机或下游设备的 TCP / UDP 流量透明导入 sing-box 路由。该入站源自 reF1nd，本分支改用 [ANOONIMASXP/sing-ebpf](https://github.com/ANOONIMASXP/sing-ebpf)（当前版本 v0.1.0-alpha.17）并同步维护集成代码。运行时为纯 Go 实现，使用 `with_ebpf` 构建时不需要 cgo 或 Android NDK。
 
 | 拦截范围 | 数据面 | 工作方式 |
 |---|---|---|

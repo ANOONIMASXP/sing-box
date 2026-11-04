@@ -3,8 +3,8 @@
 package ebpf
 
 import (
-	commonEBPF "github.com/MiChongs/sing-ebpf"
-	kernelRuntime "github.com/MiChongs/sing-ebpf/runtime"
+	commonEBPF "github.com/ANOONIMASXP/sing-ebpf"
+	kernelRuntime "github.com/ANOONIMASXP/sing-ebpf/runtime"
 )
 
 // Consumer-side aliases keep the adapter independent of the implementation

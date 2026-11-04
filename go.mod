@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	filippo.io/age v1.3.1
-	github.com/MiChongs/sing-ebpf v0.1.0-alpha.27
+	github.com/ANOONIMASXP/sing-ebpf v0.1.0-alpha.27
 	github.com/anthropics/anthropic-sdk-go v1.26.0
 	github.com/caddyserver/certmagic v0.25.3-0.20260421143802-60d9d8b415d6
 	github.com/caddyserver/zerossl v0.1.5
@@ -93,6 +93,7 @@ require (
 )
 
 replace (
+	github.com/ANOONIMASXP/sing-ebpf => ../sing-ebpf
 	github.com/easytier/easytier/easytier-go => github.com/MiChongs/easytier-go v0.0.0-20261028041007-78dad22f2199
 	github.com/metacubex/wazero => github.com/MiChongs/wazero v0.0.0-20261028034105-3ae26daa8d18
 	github.com/sagernet/quic-go => github.com/MiChongs/quic-go v0.0.0-20261029121315-f35e38a0ba62

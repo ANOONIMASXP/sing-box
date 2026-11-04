@@ -8,7 +8,7 @@ import (
 	"sync"
 	"syscall"
 
-	commonEBPF "github.com/MiChongs/sing-ebpf"
+	commonEBPF "github.com/ANOONIMASXP/sing-ebpf"
 	"github.com/sagernet/sing-box/adapter"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
@@ -17,6 +17,21 @@ import (
 
 	"golang.org/x/sys/unix"
 )
+
+// selfBypassUsesUserspaceCleanup reports whether the runtime has no kernel
+// socket-release hook, so sockets must be explicitly unregistered when they
+// close. sing-ebpf renamed this mode from "lru_fallback" to
+// "userspace_unregister" when the ownership map stopped silently evicting
+// live sockets; accept both names so the integration works with either
+// library version.
+func selfBypassUsesUserspaceCleanup(tracker *commonEBPF.SelfBypass) bool {
+	switch tracker.CleanupMode() {
+	case "lru_fallback", "userspace_unregister":
+		return true
+	default:
+		return false
+	}
+}
 
 // bindEBPFSelfBypassConnLifecycle pairs userspace socket registration with the
 // returned connection's Close method. Kernel sock_release cleanup remains the
@@ -30,7 +45,7 @@ func bindEBPFSelfBypassConnLifecycle(networkManager adapter.NetworkManager, conn
 		return conn
 	}
 	tracker := provider.EBPFSelfBypass()
-	if tracker.CleanupMode() != "lru_fallback" {
+	if !selfBypassUsesUserspaceCleanup(tracker) {
 		return conn
 	}
 	if lazyConn, loaded := conn.(*slowOpenConn); loaded {
@@ -61,7 +76,7 @@ func bindEBPFSelfBypassPacketConnLifecycle(networkManager adapter.NetworkManager
 		return conn
 	}
 	tracker := provider.EBPFSelfBypass()
-	if tracker.CleanupMode() != "lru_fallback" {
+	if !selfBypassUsesUserspaceCleanup(tracker) {
 		return conn
 	}
 	syscallConn, loaded := conn.(syscall.Conn)
@@ -137,7 +152,7 @@ func EBPFSelfBypassCleanup(networkManager adapter.NetworkManager, rawConn syscal
 		return nil
 	}
 	tracker := provider.EBPFSelfBypass()
-	if tracker == nil || tracker.CleanupMode() != "lru_fallback" {
+	if tracker == nil || !selfBypassUsesUserspaceCleanup(tracker) {
 		return nil
 	}
 	var once sync.Once

@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	commonEBPF "github.com/MiChongs/sing-ebpf"
+	commonEBPF "github.com/ANOONIMASXP/sing-ebpf"
 	"github.com/sagernet/sing-box/log"
 )
 

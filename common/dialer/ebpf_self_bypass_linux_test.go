@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"testing"
 
-	commonEBPF "github.com/MiChongs/sing-ebpf"
+	commonEBPF "github.com/ANOONIMASXP/sing-ebpf"
 	"github.com/sagernet/sing-box/adapter"
 	N "github.com/sagernet/sing/common/network"
 
