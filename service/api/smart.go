@@ -21,6 +21,7 @@ import (
 func newSmartHandler(ctx context.Context, secret string) http.Handler {
 	handler := &smartHandler{ctx: ctx, secret: secret, mux: http.NewServeMux()}
 	handler.mux.HandleFunc("GET /smart/groups", handler.handleGroups)
+	handler.mux.HandleFunc("GET /smart/weights", handler.handleWeights)
 	handler.mux.HandleFunc("GET /smart/groups/{tag}", handler.handleGroup)
 	handler.mux.HandleFunc("POST /smart/groups/{tag}/recompute", handler.handleRecompute)
 	handler.mux.HandleFunc("POST /smart/groups/{tag}/clear-selection", handler.handleClearSelection)
@@ -122,6 +123,22 @@ func (h *smartHandler) handleGroups(writer http.ResponseWriter, request *http.Re
 		summaries = append(summaries, smartSummary(smartGroup))
 	}
 	writeSmartJSON(writer, http.StatusOK, map[string]any{"groups": summaries})
+}
+
+func (h *smartHandler) handleWeights(writer http.ResponseWriter, request *http.Request) {
+	groups, err := h.smartGroups()
+	if err != nil {
+		writeSmartError(writer, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	weights := make(map[string]any, len(groups))
+	for _, smartGroup := range groups {
+		ranking, err := smartGroup.WeightRanking(false)
+		if err == nil {
+			weights[smartGroup.Tag()] = ranking
+		}
+	}
+	writeSmartJSON(writer, http.StatusOK, map[string]any{"weights": weights})
 }
 
 func (h *smartHandler) handleGroup(writer http.ResponseWriter, request *http.Request) {
