@@ -126,6 +126,10 @@ func (i *Inbound) startInbound() error {
 		SelfBypass:       i.selfBypass,
 		TrackProcess:     i.processTracker != nil,
 		ICMPEchoReply:    i.fakeIPICMPReply,
+		// Keep the TC data plane on the same network incarnation as the
+		// cgroup backend so a rebuild does not revive flows from an old
+		// handover; the library treats zero as the initial generation.
+		NetworkGeneration: uint32(i.currentNetworkGeneration()),
 	}
 	if runtime.GOOS == "android" {
 		backendConfig.AssignmentCapacity = commonEBPF.CompactTCAssignmentCapacity

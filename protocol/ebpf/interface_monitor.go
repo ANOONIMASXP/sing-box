@@ -33,6 +33,7 @@ func (i *Inbound) InterfaceUpdated(ctx context.Context) {
 	}
 	i.diagnostics.access.Lock()
 	i.networkGeneration++
+	networkGeneration := i.networkGeneration
 	i.diagnostics.access.Unlock()
 	// The raw netlink/default-interface monitors below are intentionally only
 	// responsible for keeping kernel attachments and host policy current. A
@@ -51,6 +52,15 @@ func (i *Inbound) InterfaceUpdated(ctx context.Context) {
 		return
 	}
 	i.setDefaultInterfaceName(i.currentDefaultInterfaceName())
+	// Advance the TC incarnation at the same coordinated boundary as the
+	// cgroup reset. Old assignments and return routes stay for bounded
+	// reclamation, but lookups no longer accept them; a rebuild that races
+	// this handover also receives the new generation through TCConfig.
+	if backend := i.tcBackend(); backend != nil {
+		if err := backend.SetNetworkGeneration(uint32(networkGeneration)); err != nil {
+			i.interfaceWarnings.reconcile.warn(i.logger, "advance TC eBPF network generation: ", err)
+		}
+	}
 	i.udpNat.Purge()
 	if err := i.udpReplySockets.reset(); err != nil {
 		i.interfaceWarnings.reconcile.warn(i.logger, "reset TC eBPF UDP reply sockets after network change: ", err)
