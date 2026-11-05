@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/sagernet/sing-box/cmd/internal/build_shared"
-	"github.com/sagernet/sing-box/common/badversion"
 	"github.com/sagernet/sing-box/log"
 )
 
@@ -25,15 +24,9 @@ func main() {
 		versionStr string
 		err        error
 	)
-	if flagRunNightly {
-		var version badversion.Version
-		version, err = build_shared.ReadTagVersion()
-		if err == nil {
-			versionStr = version.String()
-		}
-	} else {
-		versionStr, err = build_shared.ReadTag()
-	}
+	// Both regular and nightly builds use the fork version scheme:
+	// upstream base + UTC build date + -anonima.
+	versionStr, err = build_shared.ReadAnonimaVersion()
 	if flagRunInCI {
 		if err != nil {
 			log.Fatal(err)

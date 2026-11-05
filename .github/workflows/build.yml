@@ -71,8 +71,13 @@ jobs:
       - name: Check input version
         if: github.event_name == 'workflow_dispatch'
         run: |-
-          echo "version=${{ inputs.version }}"
-          echo "version=${{ inputs.version }}" >> "$GITHUB_ENV"
+          VERSION="${{ inputs.version }}"
+          VERSION="${VERSION#v}"
+          if [[ "$VERSION" != *-anonima ]]; then
+            VERSION="${VERSION}.$(date -u +%y%m%d)-anonima"
+          fi
+          echo "version=$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_ENV"
       - name: Calculate version
         if: github.event_name != 'workflow_dispatch'
         run: |-

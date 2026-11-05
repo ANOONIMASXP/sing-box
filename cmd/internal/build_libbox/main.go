@@ -63,12 +63,12 @@ var (
 func init() {
 	sharedFlags = append(sharedFlags, "-trimpath")
 	sharedFlags = append(sharedFlags, "-buildvcs=false")
-	currentTag, err := build_shared.ReadTag()
+	currentVersion, err := build_shared.ReadAnonimaVersion()
 	if err != nil {
-		currentTag = "unknown"
+		currentVersion = "unknown"
 	}
-	sharedFlags = append(sharedFlags, "-ldflags", build_shared.LinkerFlags(currentTag, false))
-	debugFlags = append(debugFlags, "-ldflags", build_shared.LinkerFlags(currentTag, true))
+	sharedFlags = append(sharedFlags, "-ldflags", build_shared.LinkerFlags(currentVersion, false))
+	debugFlags = append(debugFlags, "-ldflags", build_shared.LinkerFlags(currentVersion, true))
 
 	sharedTags = append(sharedTags, "with_quic", "with_wireguard", "with_utls", "with_naive_outbound", "with_clash_api", "with_xhttp", "with_usbip", "badlinkname", "tfogo_checklinkname0")
 	darwinTags = append(darwinTags, "with_dhcp", "grpcnotrace")
