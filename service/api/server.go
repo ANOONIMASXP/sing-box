@@ -90,7 +90,7 @@ func (s *Service) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	}
 	httpServer := &http.Server{
 		//nolint:staticcheck
-		Handler: h2c.NewHandler(newHTTPHandler(s.logger, grpcServer, s.options, s.dashboard, newSmartHandler(ctx, s.options.Secret), observabilityHandler), new(http2.Server)),
+		Handler: h2c.NewHandler(newHTTPHandler(s.logger, grpcServer, s.options, s.dashboard, observabilityHandler), new(http2.Server)),
 		BaseContext: func(net.Listener) context.Context {
 			return ctx
 		},
