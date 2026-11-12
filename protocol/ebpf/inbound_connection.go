@@ -210,7 +210,8 @@ func (i *Inbound) socketControl(ipv6Listener bool) control.Func {
 		if i.selfBypass == nil {
 			return nil
 		}
-		return i.selfBypass.RegisterSocket(rawConn)
+		_, err := i.selfBypass.RegisterSocket(rawConn)
+		return err
 	}
 }
 

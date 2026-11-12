@@ -373,7 +373,8 @@ func (i *Inbound) newTCUDPReplySocket(source netip.AddrPort) (*net.UDPConn, func
 			return err
 		}
 		if selfBypass != nil {
-			return selfBypass.RegisterSocket(rawConn)
+			_, err := selfBypass.RegisterSocket(rawConn)
+			return err
 		}
 		return nil
 	})
@@ -398,9 +399,23 @@ func (i *Inbound) newTCUDPReplySocket(source netip.AddrPort) (*net.UDPConn, func
 		cleanup = func() {
 			rawConn, err := udpConnection.SyscallConn()
 			if err == nil {
-				_ = selfBypass.UnregisterSocket(rawConn)
+				_ = unregisterSelfBypassRawConn(selfBypass, rawConn)
 			}
 		}
 	}
 	return udpConnection, cleanup, nil
+}
+
+// unregisterSelfBypassRawConn releases a userspace-published TC reply socket
+// using the socket cookie as the lifecycle token, matching the new
+// SelfBypass.RegisterSocket API.
+func unregisterSelfBypassRawConn(tracker *commonEBPF.SelfBypass, rawConn syscall.RawConn) error {
+	cookie, err := tracker.SocketCookie(rawConn)
+	if err != nil {
+		return err
+	}
+	if cookie == 0 {
+		return nil
+	}
+	return tracker.UnregisterSocket(commonEBPF.SocketRegistration{Cookie: cookie})
 }

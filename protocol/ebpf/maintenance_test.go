@@ -66,11 +66,11 @@ func TestTCAssignmentPartialUsageIsNotPressureEvidence(t *testing.T) {
 }
 func TestTCSweepReportsIndependentMapValidity(t *testing.T) {
 	i := &Inbound{}
-	i.recordTCAssignmentSweep(commonEBPF.TCAssignmentSweepResult{
+	i.recordTCAssignmentSweep(commonEBPF.TCFlowSweepResult{
 		Usage: commonEBPF.MapUsage{Entries: 7, Capacity: 64}, UsageKnown: true,
 		ReturnUsage: commonEBPF.MapUsage{Entries: 40, Capacity: 64}, ReturnUsageKnown: true, Complete: true,
 	})
-	i.recordTCAssignmentSweep(commonEBPF.TCAssignmentSweepResult{
+	i.recordTCAssignmentSweep(commonEBPF.TCFlowSweepResult{
 		Usage: commonEBPF.MapUsage{Entries: 8, Capacity: 64}, UsageKnown: true,
 		FailureMap: "sb_tc_return", Failure: "scan",
 	})

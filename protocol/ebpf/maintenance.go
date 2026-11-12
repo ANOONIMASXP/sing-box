@@ -210,7 +210,7 @@ func (i *Inbound) sweepTCAssignmentMaintenance() (bool, error) {
 	if i.tcAssignmentSweepPressure.Load() {
 		maxIdle = tcAssignmentPressureMaxIdle
 	}
-	result, err := backend.SweepAssignments(maxIdle, tcAssignmentMaintenanceBudget)
+	result, err := backend.SweepFlows(maxIdle, tcAssignmentMaintenanceBudget)
 	i.recordTCAssignmentSweep(result)
 	if err != nil {
 		i.interfaceWarnings.reconcile.warn(i.logger, "sweep TC eBPF assignments: ", err)
@@ -255,7 +255,7 @@ func updateTCAssignmentPressure(active bool, belowExitRounds uint32, usage commo
 	})
 }
 
-func (i *Inbound) recordTCAssignmentSweep(result commonEBPF.TCAssignmentSweepResult) {
+func (i *Inbound) recordTCAssignmentSweep(result commonEBPF.TCFlowSweepResult) {
 	i.tcReturnSweepScanned.Add(uint64(result.ReturnScanned))
 	i.tcReturnSweepRemoved.Add(uint64(result.ReturnRemoved))
 	i.tcAssignmentSweepUsageKnown.Store(result.UsageKnown)

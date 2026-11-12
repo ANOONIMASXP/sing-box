@@ -52,7 +52,7 @@ func bindEBPFSelfBypassConnLifecycle(networkManager adapter.NetworkManager, conn
 		lazyConn.setCloseHandler(func(tcpConn *net.TCPConn) {
 			rawConn, err := tcpConn.SyscallConn()
 			if err == nil {
-				_ = tracker.UnregisterSocket(rawConn)
+				_ = unregisterEBPFSelfBypassSocket(tracker, rawConn)
 			}
 		})
 		return conn
@@ -157,7 +157,7 @@ func EBPFSelfBypassCleanup(networkManager adapter.NetworkManager, rawConn syscal
 	}
 	var once sync.Once
 	return func() {
-		once.Do(func() { _ = tracker.UnregisterSocket(rawConn) })
+		once.Do(func() { _ = unregisterEBPFSelfBypassSocket(tracker, rawConn) })
 	}
 }
 
@@ -268,11 +268,27 @@ func AppendEBPFSelfBypass(networkManager adapter.NetworkManager, controlFunc con
 	}
 	tracker := provider.EBPFSelfBypass()
 	selfBypassFunc := func(_ string, _ string, rawConn syscall.RawConn) error {
-		return tracker.RegisterSocket(rawConn)
+		_, err := tracker.RegisterSocket(rawConn)
+		return err
 	}
 	return control.Append(controlFunc, selfBypassFunc)
 }
 
 func appendEBPFSelfBypass(networkManager adapter.NetworkManager, dialerControl, listenerControl control.Func) (control.Func, control.Func) {
 	return AppendEBPFSelfBypass(networkManager, dialerControl), AppendEBPFSelfBypass(networkManager, listenerControl)
+}
+
+// unregisterEBPFSelfBypassSocket releases a userspace-published socket using
+// the cookie as the lifecycle token. The registration token is not available
+// from control-chain callbacks, but the cookie is the same value and the FD
+// is still open when connection wrappers run cleanup.
+func unregisterEBPFSelfBypassSocket(tracker *commonEBPF.SelfBypass, rawConn syscall.RawConn) error {
+	cookie, err := tracker.SocketCookie(rawConn)
+	if err != nil {
+		return err
+	}
+	if cookie == 0 {
+		return nil
+	}
+	return tracker.UnregisterSocket(commonEBPF.SocketRegistration{Cookie: cookie})
 }
