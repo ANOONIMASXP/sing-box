@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/experimental/smartapi"
 	"github.com/sagernet/sing/service"
 
 	"github.com/go-chi/chi/v5"
@@ -30,7 +31,7 @@ func cacheRouter(ctx context.Context) http.Handler {
 // FlushAll): 204 on success.
 func flushSmartAll(ctx context.Context) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		groups, err := smartGroups(ctx)
+		groups, err := smartapi.Groups(ctx)
 		if err != nil {
 			render.Status(r, http.StatusInternalServerError)
 			render.JSON(w, r, newError(err.Error()))
@@ -58,7 +59,7 @@ func flushSmartGroup(ctx context.Context) func(w http.ResponseWriter, r *http.Re
 			render.JSON(w, r, newError("config name is required"))
 			return
 		}
-		sg, err := resolveSmartGroup(ctx, name)
+		sg, err := smartapi.Resolve(ctx, name)
 		if err != nil {
 			flushSmartAll(ctx)(w, r)
 			return

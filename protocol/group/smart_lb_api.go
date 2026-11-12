@@ -30,21 +30,30 @@ func (s *Smart) RegionOf(tag string) string {
 	return s.balance.snapshot().regionOf[tag]
 }
 
-// SetRegionLock locks the group to a region (code, built-in name or region
-// outbound tag); "" unlocks. Returns the applied region code.
-func (s *Smart) SetRegionLock(raw string) (string, error) {
+// ValidateRegionLock resolves a region lock without changing any state.
+func (s *Smart) ValidateRegionLock(raw string) (string, error) {
 	if s.balance == nil {
 		return "", E.New("not a smart-loadbalance group")
 	}
-	b := s.balance
 	code := ""
 	if strings.TrimSpace(raw) != "" {
 		var ok bool
-		code, ok = b.resolveRegion(raw)
+		code, ok = s.balance.resolveRegion(raw)
 		if !ok {
 			return "", E.New("unknown region: ", raw)
 		}
 	}
+	return code, nil
+}
+
+// SetRegionLock locks the group to a region (code, built-in name or region
+// outbound tag); "" unlocks. Returns the applied region code.
+func (s *Smart) SetRegionLock(raw string) (string, error) {
+	code, err := s.ValidateRegionLock(raw)
+	if err != nil {
+		return "", err
+	}
+	b := s.balance
 	previous := b.currentLock()
 	b.setLock(code)
 	b.persistRegionState()
@@ -61,9 +70,8 @@ func (s *Smart) SetRegionLock(raw string) (string, error) {
 	return code, nil
 }
 
-// SetRegionMode switches the region mode at runtime; "" restores the
-// configured mode. Returns the applied mode.
-func (s *Smart) SetRegionMode(raw string) (string, error) {
+// ValidateRegionMode normalizes a region mode without changing any state.
+func (s *Smart) ValidateRegionMode(raw string) (string, error) {
 	if s.balance == nil {
 		return "", E.New("not a smart-loadbalance group")
 	}
@@ -78,6 +86,17 @@ func (s *Smart) SetRegionMode(raw string) (string, error) {
 	if mode == regionModePriority && len(b.priority) == 0 {
 		return "", E.New("region mode priority requires region.priority in the configuration")
 	}
+	return mode, nil
+}
+
+// SetRegionMode switches the region mode at runtime; "" restores the
+// configured mode. Returns the applied mode.
+func (s *Smart) SetRegionMode(raw string) (string, error) {
+	mode, err := s.ValidateRegionMode(raw)
+	if err != nil {
+		return "", err
+	}
+	b := s.balance
 	if mode == regionModeDestination {
 		// Start fetching the country database now rather than on the first
 		// connection.

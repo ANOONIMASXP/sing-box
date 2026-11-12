@@ -182,8 +182,12 @@ func (s *Smart) MarkBlocked(tag string, duration time.Duration) error {
 	return nil
 }
 
-// UnblockNode lifts a group-wide block.
+// UnblockNode lifts a group-wide block. Unknown tags are ignored before
+// touching the engine interner.
 func (s *Smart) UnblockNode(tag string) {
+	if !s.HasMember(tag) {
+		return
+	}
 	s.blocks.UnblockGroupNode(s.group.ID(), s.engine.NodeID(tag))
 }
 
@@ -247,37 +251,54 @@ func (s *Smart) FlushStore() (smart.FlushStats, error) {
 	return stats, err
 }
 
+// MemberInfo describes one member of a Smart group for API responses.
+type MemberInfo struct {
+	Name         string  `json:"name"`
+	Alive        bool    `json:"alive"`
+	Delay        uint16  `json:"delay,omitempty"`
+	Grade        int     `json:"stabilityGrade,omitempty"`
+	Blocked      string  `json:"blocked,omitempty"`
+	BlockedUntil int64   `json:"blockedUntil,omitempty"`
+	Load         int64   `json:"load"`
+	Priority     float64 `json:"priority"`
+	ExitRegion   string  `json:"exitRegion,omitempty"`
+	ExitASN      string  `json:"exitAsn,omitempty"`
+}
+
+// MemberInfo returns the current member diagnostics without interning any
+// strings; unknown tags are therefore harmless.
+func (s *Smart) MemberInfo() []MemberInfo {
+	st := s.state.Load()
+	if st == nil {
+		return nil
+	}
+	now := time.Now()
+	members := make([]MemberInfo, 0, len(st.tags))
+	for i, tag := range st.tags {
+		info := MemberInfo{Name: tag, Alive: s.health.alive(tag), Delay: s.health.delay(tag), Load: s.nodeLoad.get(tag), Priority: s.priority.Factor(tag)}
+		if h, ok := s.health.snapshot(tag); ok {
+			info.Grade = h.grade
+		}
+		if block, ok := s.blocks.GroupBlocked(s.group.ID(), st.nodes[i], now); ok {
+			info.Blocked, info.BlockedUntil = block.Reason, block.Until
+		}
+		exit := s.exitWatch.Info(tag)
+		info.ExitRegion, info.ExitASN = exit.Region, exit.ASN
+		members = append(members, info)
+	}
+	return members
+}
+
+// HasMember reports whether tag is a current member without interning it.
+func (s *Smart) HasMember(tag string) bool {
+	st := s.state.Load()
+	return st != nil && st.find(tag) != nil
+}
+
 // Diagnostic describes the group's selection state for the API.
 func (s *Smart) Diagnostic() map[string]any {
-	st := s.state.Load()
 	now := time.Now()
-	type memberInfo struct {
-		Name        string  `json:"name"`
-		Alive       bool    `json:"alive"`
-		Delay       uint16  `json:"delay,omitempty"`
-		Grade       int     `json:"stabilityGrade,omitempty"`
-		Blocked     string  `json:"blocked,omitempty"`
-		BlockedTill int64   `json:"blockedUntil,omitempty"`
-		Load        int64   `json:"load"`
-		Priority    float64 `json:"priority"`
-		ExitRegion  string  `json:"exitRegion,omitempty"`
-		ExitASN     string  `json:"exitAsn,omitempty"`
-	}
-	var members []memberInfo
-	if st != nil {
-		for i, tag := range st.tags {
-			info := memberInfo{Name: tag, Alive: s.health.alive(tag), Delay: s.health.delay(tag), Load: s.nodeLoad.get(tag), Priority: s.priority.Factor(tag)}
-			if h, ok := s.health.snapshot(tag); ok {
-				info.Grade = h.grade
-			}
-			if block, ok := s.blocks.GroupBlocked(s.group.ID(), st.nodes[i], now); ok {
-				info.Blocked, info.BlockedTill = block.Reason, block.Until
-			}
-			exit := s.exitWatch.Info(tag)
-			info.ExitRegion, info.ExitASN = exit.Region, exit.ASN
-			members = append(members, info)
-		}
-	}
+	members := s.MemberInfo()
 	type hostInfo struct {
 		Key     string            `json:"key"`
 		UDP     bool              `json:"udp,omitempty"`

@@ -54,6 +54,19 @@ service StartedService {
   rpc SubmitOpenVPNChallengeResponse(OpenVPNChallengeSubmission) returns (google.protobuf.Empty) {}
   rpc CancelOpenVPNChallenge(OpenVPNChallengeCancel) returns (google.protobuf.Empty) {}
   rpc SubscribeNotifications(google.protobuf.Empty) returns (stream NotificationEvent) {}
+
+  rpc GetSmartGroups(google.protobuf.Empty) returns (SmartGroups) {}
+  rpc GetSmartGroup(SmartGroupRequest) returns (SmartGroup) {}
+  rpc GetSmartWeights(google.protobuf.Empty) returns (SmartWeights) {}
+  rpc RecomputeSmartWeights(SmartGroupRequest) returns (SmartRanking) {}
+  rpc BlockSmartNode(SmartBlockNodeRequest) returns (google.protobuf.Empty) {}
+  rpc UnblockSmartNode(SmartNodeRequest) returns (google.protobuf.Empty) {}
+  rpc ClearSmartSelection(SmartGroupRequest) returns (SmartClearSelectionResult) {}
+  rpc GetSmartRegions(SmartGroupRequest) returns (SmartRegionTable) {}
+  rpc UpdateSmartRegions(SmartUpdateRegionsRequest) returns (SmartRegionTable) {}
+  rpc UnlockSmartRegion(SmartGroupRequest) returns (SmartRegionTable) {}
+  rpc RedetectSmartRegions(SmartRedetectRegionsRequest) returns (google.protobuf.Empty) {}
+  rpc UpdateSmartBalance(SmartUpdateBalanceRequest) returns (SmartBalanceInfo) {}
 }
 
 message Version {
@@ -1007,4 +1020,220 @@ message EBPFPolicyEpochDiagnostics {
   uint64 sharedConfirmed = 3;
   uint64 sharedExpected = 4;
   bool converged = 5;
+}
+
+message SmartGroupRequest {
+  string tag = 1;
+  bool includeDiagnosticJson = 2;
+}
+
+message SmartNodeRequest {
+  string tag = 1;
+  string node = 2;
+}
+
+message SmartBlockNodeRequest {
+  string tag = 1;
+  string node = 2;
+  int64 duration = 3;
+}
+
+message SmartUpdateRegionsRequest {
+  string tag = 1;
+  string lock = 2;
+  string mode = 3;
+  bool setLock = 4;
+  bool setMode = 5;
+}
+
+message SmartRedetectRegionsRequest {
+  string tag = 1;
+  bool force = 2;
+}
+
+message SmartUpdateBalanceRequest {
+  string tag = 1;
+  string strategy = 2;
+  string affinity = 3;
+}
+
+message SmartPriorityRule {
+  string pattern = 1;
+  double factor = 2;
+}
+
+message SmartGroups {
+  repeated SmartGroupSummary groups = 1;
+}
+
+message SmartGroupSummary {
+  string tag = 1;
+  string type = 2;
+  string testUrl = 3;
+  string expectedStatus = 4;
+  bool preferAsn = 5;
+  bool useLightGBM = 6;
+  bool collectData = 7;
+  double sampleRate = 8;
+  uint32 tolerance = 9;
+  string fixed = 10;
+  string now = 11;
+  uint32 memberCount = 12;
+  bool loadBalance = 13;
+  repeated SmartPriorityRule policyPriority = 14;
+  string lgbmModelAge = 15;
+}
+
+message SmartGroup {
+  SmartGroupSummary summary = 1;
+  repeated SmartMember members = 2;
+  repeated SmartNodeRank ranking = 3;
+  SmartRegionTable regionTable = 4;
+  SmartBalanceInfo balanceInfo = 5;
+  string diagnosticJson = 6;
+}
+
+message SmartMember {
+  string name = 1;
+  bool alive = 2;
+  uint32 delay = 3;
+  int32 stabilityGrade = 4;
+  string blocked = 5;
+  int64 blockedUntil = 6;
+  int64 load = 7;
+  double priority = 8;
+  string exitRegion = 9;
+  string exitAsn = 10;
+}
+
+message SmartNodeRank {
+  string name = 1;
+  string rank = 2;
+  double weight = 3;
+  bool alive = 4;
+  bool pool = 5;
+  double utility = 6;
+  double reliability = 7;
+  double observed = 8;
+  double quality = 9;
+  double completed = 10;
+  bool qualified = 11;
+  uint32 failStreak = 12;
+  bool backedOff = 13;
+  double probeMs = 14;
+  double responseMs = 15;
+  double setupMs = 16;
+  double uploadBps = 17;
+  double downloadBps = 18;
+  double loss = 19;
+  int64 success = 20;
+  int64 failure = 21;
+  int32 targets = 22;
+}
+
+message SmartRanking {
+  repeated SmartNodeRank items = 1;
+}
+
+message SmartWeights {
+  map<string, SmartRanking> weights = 1;
+  map<string, string> errors = 2;
+}
+
+message SmartClearSelectionResult {
+  string group = 1;
+  string previousPin = 2;
+  string now = 3;
+  bool interrupted = 4;
+}
+
+message SmartRegionMember {
+  string name = 1;
+  string source = 2;
+  bool healthy = 3;
+  int64 load = 4;
+  double quality = 5;
+  string exit = 6;
+  string exitIp = 7;
+}
+
+message SmartRegion {
+  string code = 1;
+  string name = 2;
+  string nameEn = 3;
+  string flag = 4;
+  string icon = 5;
+  uint32 count = 6;
+  uint32 healthy = 7;
+  int64 load = 8;
+  double score = 9;
+  bool allowed = 10;
+  double weight = 11;
+  string outbound = 12;
+  string last = 13;
+  repeated SmartRegionMember members = 14;
+}
+
+message SmartRegionDetectInfo {
+  bool name = 1;
+  string exit = 2;
+  string exitUrl = 3;
+  string exitTtl = 4;
+}
+
+message SmartRegionProbeInfo {
+  bool enabled = 1;
+  string interval = 2;
+  int32 targets = 3;
+  int32 regions = 4;
+  int32 tracked = 5;
+  int32 results = 6;
+}
+
+message SmartRegionOutboundsInfo {
+  bool enabled = 1;
+  bool auto = 2;
+  string members = 3;
+  string tag = 4;
+}
+
+message SmartRegionMemoryInfo {
+  int32 regionTargets = 1;
+  int32 affinity = 2;
+}
+
+message SmartRegionTable {
+  string group = 1;
+  string mode = 2;
+  string configMode = 3;
+  string lock = 4;
+  string strategy = 5;
+  string configStrategy = 6;
+  string affinity = 7;
+  string configAffinity = 8;
+  string affinityTtl = 9;
+  string fallback = 10;
+  repeated string priority = 11;
+  uint32 minNodes = 12;
+  double minQuality = 13;
+  uint32 maxNodes = 14;
+  uint32 maxConnections = 15;
+  string sticky = 16;
+  double switchMargin = 17;
+  string unknown = 18;
+  SmartRegionDetectInfo detect = 19;
+  SmartRegionProbeInfo probe = 20;
+  repeated SmartRegion regions = 21;
+  SmartRegionOutboundsInfo outbounds = 22;
+  repeated string excluded = 23;
+  SmartRegionMemoryInfo memory = 24;
+}
+
+message SmartBalanceInfo {
+  string strategy = 1;
+  string affinity = 2;
+  string mode = 3;
+  string lock = 4;
+  string fallback = 5;
+  repeated SmartRegion regions = 6;
 }

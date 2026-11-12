@@ -8,20 +8,17 @@ package clashapi
 import (
 	"context"
 	"net/http"
-	"sync"
 	"time"
 
-	"github.com/sagernet/sing-box/adapter"
-	"github.com/sagernet/sing-box/common/smart"
+	"github.com/sagernet/sing-box/experimental/smartapi"
 	"github.com/sagernet/sing-box/protocol/group"
-	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/service"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 )
 
-// smartRouter mounts at /smart.
+// smartRouter mounts at /smart. It is kept for Clash API compatibility;
+// native clients should use the StartedService Smart RPCs.
 func smartRouter(ctx context.Context) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/weights", getAllSmartWeights(ctx))
@@ -41,80 +38,17 @@ func smartRouter(ctx context.Context) http.Handler {
 	return r
 }
 
-func smartGroups(ctx context.Context) ([]*group.Smart, error) {
-	outboundMgr := service.FromContext[adapter.OutboundManager](ctx)
-	if outboundMgr == nil {
-		return nil, E.New("outbound manager unavailable")
-	}
-	var groups []*group.Smart
-	for _, ob := range outboundMgr.Outbounds() {
-		if sg, ok := ob.(*group.Smart); ok {
-			groups = append(groups, sg)
-		}
-	}
-	return groups, nil
-}
-
-func resolveSmartGroup(ctx context.Context, name string) (*group.Smart, error) {
-	outboundMgr := service.FromContext[adapter.OutboundManager](ctx)
-	if outboundMgr == nil {
-		return nil, E.New("outbound manager unavailable")
-	}
-	ob, loaded := outboundMgr.Outbound(name)
-	if !loaded {
-		return nil, E.New("group not found: " + name)
-	}
-	sg, ok := ob.(*group.Smart)
-	if !ok {
-		return nil, E.New("not a Smart group: " + name)
-	}
-	return sg, nil
-}
-
-// allSmartWeights ranks every Smart group concurrently (mihomo
-// getAllGroupWeights): groups without data map to null.
-func allSmartWeights(ctx context.Context, refresh bool) (map[string][]smart.NodeRank, map[string]string, error) {
-	groups, err := smartGroups(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	result := make(map[string][]smart.NodeRank, len(groups))
-	errorsMap := make(map[string]string)
-	var (
-		access sync.Mutex
-		wg     sync.WaitGroup
-		sem    = make(chan struct{}, 5)
-	)
-	for _, sg := range groups {
-		wg.Add(1)
-		sem <- struct{}{}
-		go func(sg *group.Smart) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			weights, err := sg.WeightRanking(refresh)
-			access.Lock()
-			defer access.Unlock()
-			if err != nil {
-				errorsMap[sg.Tag()] = err.Error()
-				return
-			}
-			result[sg.Tag()] = weights
-		}(sg)
-	}
-	wg.Wait()
-	return result, errorsMap, nil
-}
-
 func getAllSmartWeights(ctx context.Context) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		result, errorsMap, err := allSmartWeights(ctx, r.URL.Query().Get("refresh") == "true")
+		groups, err := smartapi.Groups(ctx)
 		if err != nil {
 			render.Status(r, http.StatusInternalServerError)
 			render.JSON(w, r, newError(err.Error()))
 			return
 		}
+		result, errorsMap := smartapi.Weights(groups, r.URL.Query().Get("refresh") == "true")
 		if len(result) == 0 && len(errorsMap) == 0 {
-			render.JSON(w, r, render.M{"weights": map[string][]smart.NodeRank{}, "message": "No Smart groups or no weight data available"})
+			render.JSON(w, r, render.M{"weights": map[string]any{}, "message": "No Smart groups or no weight data available"})
 			return
 		}
 		render.JSON(w, r, render.M{"weights": result, "errors": errorsMap})
@@ -123,29 +57,30 @@ func getAllSmartWeights(ctx context.Context) func(w http.ResponseWriter, r *http
 
 // smartGroupInfo is the per-group summary of GET /smart/groups.
 func smartGroupInfo(sg *group.Smart) map[string]any {
+	summary := smartapi.Summarize(sg)
 	info := map[string]any{
-		"name":           sg.Tag(),
-		"type":           sg.Type(),
-		"testUrl":        sg.TestURL(),
-		"expectedStatus": sg.ExpectedStatus(),
-		"preferASN":      sg.PreferASN(),
-		"useLightGBM":    sg.UseLightGBM(),
-		"collectData":    sg.CollectData(),
-		"sampleRate":     sg.SampleRate(),
-		"tolerance":      sg.Tolerance(),
-		"fixed":          sg.FixedSelection(),
-		"now":            sg.Now(),
-		"members":        len(sg.MemberTags()),
+		"name":           summary.Tag,
+		"type":           summary.Type,
+		"testUrl":        summary.TestURL,
+		"expectedStatus": summary.ExpectedStatus,
+		"preferASN":      summary.PreferASN,
+		"useLightGBM":    summary.UseLightGBM,
+		"collectData":    summary.CollectData,
+		"sampleRate":     summary.SampleRate,
+		"tolerance":      summary.Tolerance,
+		"fixed":          summary.Fixed,
+		"now":            summary.Now,
+		"members":        summary.MemberCount,
 	}
-	if rules := sg.PolicyPriority(); len(rules) > 0 {
-		priority := make([]map[string]any, len(rules))
-		for i, rule := range rules {
+	if len(summary.PolicyPriority) > 0 {
+		priority := make([]map[string]any, len(summary.PolicyPriority))
+		for i, rule := range summary.PolicyPriority {
 			priority[i] = map[string]any{"pattern": rule.Pattern, "factor": rule.Factor}
 		}
 		info["policyPriority"] = priority
 	}
-	if age := sg.LGBMModelAge(); age > 0 {
-		info["lgbmModelAge"] = age.Round(time.Second).String()
+	if summary.LGBMModelAge != "" {
+		info["lgbmModelAge"] = summary.LGBMModelAge
 	}
 	if sg.IsLoadBalance() {
 		info["loadBalance"] = sg.BalanceInfo()
@@ -155,7 +90,7 @@ func smartGroupInfo(sg *group.Smart) map[string]any {
 
 func listSmartGroups(ctx context.Context) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		groups, err := smartGroups(ctx)
+		groups, err := smartapi.Groups(ctx)
 		if err != nil {
 			render.Status(r, http.StatusInternalServerError)
 			render.JSON(w, r, newError(err.Error()))
@@ -175,7 +110,7 @@ func listSmartGroups(ctx context.Context) func(w http.ResponseWriter, r *http.Re
 // the evidence cache sizes.
 func smartGroupDiag(ctx context.Context) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		sg, err := resolveSmartGroup(ctx, chi.URLParam(r, "name"))
+		sg, err := smartapi.Resolve(ctx, chi.URLParam(r, "name"))
 		if err != nil {
 			render.Status(r, http.StatusNotFound)
 			render.JSON(w, r, newError(err.Error()))
@@ -191,7 +126,7 @@ func smartGroupDiag(ctx context.Context) func(w http.ResponseWriter, r *http.Req
 
 func recomputeSmartWeights(ctx context.Context) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		sg, err := resolveSmartGroup(ctx, chi.URLParam(r, "name"))
+		sg, err := smartapi.Resolve(ctx, chi.URLParam(r, "name"))
 		if err != nil {
 			render.Status(r, http.StatusNotFound)
 			render.JSON(w, r, newError(err.Error()))
@@ -204,7 +139,7 @@ func recomputeSmartWeights(ctx context.Context) func(w http.ResponseWriter, r *h
 
 func clearSmartSelection(ctx context.Context) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		sg, err := resolveSmartGroup(ctx, chi.URLParam(r, "name"))
+		sg, err := smartapi.Resolve(ctx, chi.URLParam(r, "name"))
 		if err != nil {
 			render.Status(r, http.StatusNotFound)
 			render.JSON(w, r, newError(err.Error()))
@@ -218,7 +153,7 @@ func clearSmartSelection(ctx context.Context) func(w http.ResponseWriter, r *htt
 // duration, default 30m).
 func blockSmartNode(ctx context.Context) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		sg, err := resolveSmartGroup(ctx, chi.URLParam(r, "name"))
+		sg, err := smartapi.Resolve(ctx, chi.URLParam(r, "name"))
 		if err != nil {
 			render.Status(r, http.StatusNotFound)
 			render.JSON(w, r, newError(err.Error()))
@@ -246,13 +181,19 @@ func blockSmartNode(ctx context.Context) func(w http.ResponseWriter, r *http.Req
 
 func unblockSmartNode(ctx context.Context) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		sg, err := resolveSmartGroup(ctx, chi.URLParam(r, "name"))
+		sg, err := smartapi.Resolve(ctx, chi.URLParam(r, "name"))
 		if err != nil {
 			render.Status(r, http.StatusNotFound)
 			render.JSON(w, r, newError(err.Error()))
 			return
 		}
-		sg.UnblockNode(chi.URLParam(r, "node"))
+		node := chi.URLParam(r, "node")
+		if !sg.HasMember(node) {
+			render.Status(r, http.StatusNotFound)
+			render.JSON(w, r, newError("node not a member of this group: "+node))
+			return
+		}
+		sg.UnblockNode(node)
 		render.NoContent(w, r)
 	}
 }
@@ -261,7 +202,7 @@ func unblockSmartNode(ctx context.Context) func(w http.ResponseWriter, r *http.R
 // request with the error.
 func resolveLoadBalanceGroup(ctx context.Context, w http.ResponseWriter, r *http.Request) (*group.Smart, bool) {
 	name := chi.URLParam(r, "name")
-	sg, err := resolveSmartGroup(ctx, name)
+	sg, err := smartapi.Resolve(ctx, name)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, newError(err.Error()))
@@ -311,6 +252,21 @@ func updateSmartRegions(ctx context.Context) func(w http.ResponseWriter, r *http
 			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, newError(`body must set "lock" and / or "mode"`))
 			return
+		}
+		// Validate both inputs before mutating either field.
+		if body.Mode != nil {
+			if _, err := sg.ValidateRegionMode(*body.Mode); err != nil {
+				render.Status(r, http.StatusBadRequest)
+				render.JSON(w, r, newError(err.Error()))
+				return
+			}
+		}
+		if body.Lock != nil {
+			if _, err := sg.ValidateRegionLock(*body.Lock); err != nil {
+				render.Status(r, http.StatusBadRequest)
+				render.JSON(w, r, newError(err.Error()))
+				return
+			}
 		}
 		response := render.M{"group": sg.Tag()}
 		if body.Mode != nil {

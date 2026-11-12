@@ -12,6 +12,7 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/urltest"
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/experimental/smartapi"
 	"github.com/sagernet/sing-box/protocol/group"
 	"github.com/sagernet/sing/common"
 	F "github.com/sagernet/sing/common/format"
@@ -293,19 +294,20 @@ func proxyInfo(server *Server, detour adapter.Outbound) *badjson.JSONObject {
 
 		if sg, ok := detour.(*group.Smart); ok {
 			// mihomo Smart.MarshalJSON fields.
-			info.Put("testUrl", sg.TestURL())
-			info.Put("expectedStatus", sg.ExpectedStatus())
-			info.Put("fixed", sg.FixedSelection())
+			summary := smartapi.Summarize(sg)
+			info.Put("testUrl", summary.TestURL)
+			info.Put("expectedStatus", summary.ExpectedStatus)
+			info.Put("fixed", summary.Fixed)
 			info.Put("fixedSuspended", false)
-			info.Put("fixedActive", sg.FixedSelection())
+			info.Put("fixedActive", summary.Fixed)
 			info.Put("policy-priority", smartPriorityString(sg))
-			info.Put("useLightGBM", sg.UseLightGBM())
-			info.Put("collectData", sg.CollectData())
-			info.Put("sampleRate", sg.SampleRate())
-			info.Put("preferASN", sg.PreferASN())
-			info.Put("tolerance", sg.Tolerance())
-			if age := sg.LGBMModelAge(); age > 0 {
-				info.Put("lgbmModelAge", age.Truncate(time.Second).String())
+			info.Put("useLightGBM", summary.UseLightGBM)
+			info.Put("collectData", summary.CollectData)
+			info.Put("sampleRate", summary.SampleRate)
+			info.Put("preferASN", summary.PreferASN)
+			info.Put("tolerance", summary.Tolerance)
+			if summary.LGBMModelAge != "" {
+				info.Put("lgbmModelAge", summary.LGBMModelAge)
 			}
 			if sg.IsLoadBalance() {
 				info.Put("loadBalance", sg.BalanceInfo())
